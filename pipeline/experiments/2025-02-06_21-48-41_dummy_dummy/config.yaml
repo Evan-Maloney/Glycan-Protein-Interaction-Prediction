@@ -1,0 +1,13 @@
+batch_size: 32
+binding_predictor_type: dummy
+checkpoint_frequency: 2
+data_path: data/binding_data.csv
+device: cpu
+glycan_encoder_type: dummy
+hf_auth: false
+learning_rate: 0.001
+model_specific_params: {}
+num_epochs: 10
+output_dir: experiments
+protein_encoder_type: dummy
+val_split: 0.2

@@ -1,0 +1,18 @@
+# required
+output_dir: "experiments"
+data_path: "data/binding_data_fake.csv"
+glycan_encoder_type: "chemberta"
+protein_encoder_type: "esm3"
+binding_predictor_type: "dnn"
+num_epochs: 20
+batch_size: 32
+learning_rate: 0.001
+checkpoint_frequency: 5
+
+# optional
+val_split: 0.2
+device: "cpu" # change to cuda when using a GPU instance
+hf_auth: True
+model_specific_params:
+  dnn_hidden_dims: [512, 256, 128]
+
