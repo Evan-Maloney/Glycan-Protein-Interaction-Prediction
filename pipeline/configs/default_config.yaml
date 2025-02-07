@@ -1,0 +1,16 @@
+# required
+output_dir: "experiments"
+data_path: "data/binding_data_fake.csv"
+glycan_encoder_type: "dummy"
+protein_encoder_type: "dummy"
+binding_predictor_type: "dummy"
+num_epochs: 10
+batch_size: 32
+learning_rate: 0.001
+checkpoint_frequency: 2
+
+# optional
+val_split: 0.2
+device: "cpu"
+model_specific_params: {}
+hf_auth: False
