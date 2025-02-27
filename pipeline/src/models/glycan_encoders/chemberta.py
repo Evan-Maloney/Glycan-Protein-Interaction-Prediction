@@ -30,7 +30,7 @@ class ChemBERTaEncoder(GlycanEncoder):
     
     def encode_batch(self, batch_data: List[str]) -> torch.Tensor:
         inputs = self.tokenizer(batch_data, return_tensors="pt", padding=True, truncation=True)
-        inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+        inputs = {k: v.to("cuda") for k, v in inputs.items()}
         
         with torch.no_grad():
             outputs = self.model(**inputs)

@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from typing import Dict, Tuple
 from datetime import datetime
+from tqdm import tqdm
 
 from ..utils.config import TrainingConfig
 from ..utils.metrics import calculate_metrics
@@ -36,7 +37,7 @@ class BindingTrainer:
         # build the param dictionary for the binding predictor
         predictor_params = {
             'glycan_dim': self.glycan_encoder.embedding_dim,
-            'protein_dim': self.protein_encoder.embedding_dim
+            'protein_dim': 52
         }
         if 'dnn_hidden_dims' in self.config.model_specific_params:
             predictor_params['hidden_dims'] = self.config.model_specific_params['dnn_hidden_dims']
@@ -63,7 +64,8 @@ class BindingTrainer:
         all_predictions = []
         all_targets = []
         
-        for batch in train_loader:
+        pbar = tqdm(train_loader, desc='Training')
+        for batch in pbar:
             glycan_encoding = batch['glycan_encoding'].to(self.device)
             protein_encoding = batch['protein_encoding'].to(self.device)
             concentration = batch['concentration'].to(self.device)
@@ -86,6 +88,9 @@ class BindingTrainer:
             total_loss += loss.item()
             all_predictions.append(predictions.detach())
             all_targets.append(targets.detach())
+            
+            # Update progress bar with current loss
+            pbar.set_postfix({'loss': f'{loss.item():.4f}'})
         
         # save metrics
         epoch_predictions = torch.cat(all_predictions)
@@ -105,7 +110,8 @@ class BindingTrainer:
         all_targets = []
         
         with torch.no_grad():
-            for batch in val_loader:
+            pbar = tqdm(val_loader, desc='Validating')
+            for batch in pbar:
                 glycan_encoding = batch['glycan_encoding'].to(self.device)
                 protein_encoding = batch['protein_encoding'].to(self.device)
                 concentration = batch['concentration'].to(self.device)
@@ -123,6 +129,9 @@ class BindingTrainer:
                 total_loss += loss.item()
                 all_predictions.append(predictions)
                 all_targets.append(targets)
+                
+                # Update progress bar with current loss
+                pbar.set_postfix({'loss': f'{loss.item():.4f}'})
         
         # save metrics
         val_predictions = torch.cat(all_predictions)
@@ -191,8 +200,7 @@ class BindingTrainer:
         plt.savefig(plots_dir / 'pearson_curves.png')
         plt.close()
     
-    def train(self, data_df: pd.DataFrame):
-
+    def train(self, data_df: pd.DataFrame, precomputed_path: str = None):
         all_metrics = {
             'train_loss': [],
             'val_loss': [],
@@ -208,7 +216,8 @@ class BindingTrainer:
             data_df,
             self.config.val_split,
             self.glycan_encoder,
-            self.protein_encoder
+#            self.protein_encoder,
+            precomputed_path
         )
         
         train_loader = DataLoader(

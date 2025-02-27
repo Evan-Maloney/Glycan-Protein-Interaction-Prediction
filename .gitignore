@@ -1,2 +1,4 @@
 .DS_Store
 __pycache__/
+pipeline/Miniconda3-latest-Linux-x86_64.sh
+pipeline/experiments/
