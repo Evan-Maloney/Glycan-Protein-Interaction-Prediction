@@ -1,0 +1,15 @@
+batch_size: 32
+binding_predictor_type: dummy
+checkpoint_frequency: 2
+device: cpu
+glycan_encoder_type: dummy
+glycans_data_path: data/Glycan-Structures-CFG611.txt
+hf_auth: false
+learning_rate: 0.001
+model_specific_params: {}
+num_epochs: 10
+output_dir: experiments
+predict_data_path: data/Fractions-Bound-Table.txt
+protein_encoder_type: dummy
+proteins_data_path: data/Protein-Sequence-Table.txt
+val_split: 0.2
