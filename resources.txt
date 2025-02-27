@@ -1,0 +1,14 @@
+Glycan interpretations using RDKit
+https://xinhaoli74.github.io/posts/2020/04/RDKit-Cheatsheet/
+
+Breaking down SMILES from a Glycan into Morgan fingerprints as features
+https://darkomedin-datascience.medium.com/data-science-for-drug-discovery-research-morgan-fingerprints-using-alanine-and-testosterone-92a2c69dd765
+
+Visual breakdown of Morgan Fingerprints with notebook example
+https://youtu.be/E4GR-cEsdKw
+
+Updated functions for rdkits fingerprint alg (the other sources use a deprecated function) **This blog has some key info on other fingerprint techniques we could try and look into**
+https://greglandrum.github.io/rdkit-blog/posts/2023-01-18-fingerprint-generator-tutorial.html
+
+Blog post going over the pros and cons of using Bit vector vs count vector for glycans **Could be very important when deciding on features**
+https://greglandrum.github.io/rdkit-blog/posts/2021-07-06-simulating-counts.html#:~:text=Bit%20vectors%20track%20whether%20or,of%20times%20each%20feature%20appears.
