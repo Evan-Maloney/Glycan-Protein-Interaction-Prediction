@@ -12,5 +12,6 @@ checkpoint_frequency: 2
 # optional
 val_split: 0.2
 device: "cpu"
+precomputed_path: null
 model_specific_params: {}
 hf_auth: False

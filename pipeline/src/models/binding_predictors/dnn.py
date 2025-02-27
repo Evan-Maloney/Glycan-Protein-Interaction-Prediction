@@ -28,7 +28,7 @@ class DNNBindingPredictor(BindingPredictor):
                 nn.Linear(input_dim if i==0 else hidden_dims[i-1], hidden_dim),
                 nn.ReLU(),
                 nn.BatchNorm1d(hidden_dim),
-                nn.Dropout(0.2)
+                nn.Dropout(0.1)
             ) for i, hidden_dim in enumerate(hidden_dims)],
             nn.Linear(hidden_dims[-1], 1),
             nn.Sigmoid()

@@ -25,7 +25,7 @@ def main():
     # run the training experiment
     print("Starting training...")
     trainer = BindingTrainer(config)
-    trainer.train(data_df)
+    trainer.train(data_df, config.precomputed_path)
 
 if __name__ == "__main__":
     main()

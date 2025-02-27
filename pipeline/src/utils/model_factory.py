@@ -5,13 +5,16 @@ from ..models.protein_encoders.dummy import DummyProteinEncoder
 from ..models.protein_encoders.esm3 import ESM3Encoder
 from ..models.binding_predictors.dummy import DummyBindingPredictor
 from ..models.binding_predictors.dnn import DNNBindingPredictor
+from ..models.protein_encoders.esmc import ESMCEncoder
+from ..models.glycan_encoders.fingerprint import RDKITFingerprintEncoder
 
 
 def create_glycan_encoder(encoder_type: str, **kwargs) -> Any:
     """Create glycan encoder instance based on type"""
     encoders = {
         'dummy': DummyGlycanEncoder,
-        'chemberta': ChemBERTaEncoder
+        'chemberta': ChemBERTaEncoder,
+        'rdkit-fingerprint': RDKITFingerprintEncoder,
     }
     
     encoder = encoders[encoder_type]
@@ -21,7 +24,8 @@ def create_glycan_encoder(encoder_type: str, **kwargs) -> Any:
 def create_protein_encoder(encoder_type: str, **kwargs) -> Any:
     encoders = {
         'dummy': DummyProteinEncoder,
-        'esm3': ESM3Encoder
+        'esm3': ESM3Encoder,
+        'esmc': ESMCEncoder,
     }
 
     encoder = encoders[encoder_type]
