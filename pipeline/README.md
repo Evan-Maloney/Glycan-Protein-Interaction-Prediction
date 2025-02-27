@@ -14,3 +14,5 @@ python python -m src.run_experiment [--config_path configs/experiments/my_experi
 ```bash
 export HF_TOKEN="your_token_here"
 ```
+
+Note: Make sure you run pipeline commands from within the pipeline directory.
