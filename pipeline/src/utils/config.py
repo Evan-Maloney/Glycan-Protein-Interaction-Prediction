@@ -8,7 +8,9 @@ from datetime import datetime
 class TrainingConfig:
     # required parameters
     output_dir: str
-    data_path: str
+    predict_data_path: str
+    glycans_data_path: str
+    proteins_data_path: str
     glycan_encoder_type: str
     protein_encoder_type: str
     binding_predictor_type: str

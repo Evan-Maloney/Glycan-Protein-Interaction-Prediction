@@ -15,17 +15,30 @@ def main():
     if config.hf_auth:
         authenticate_huggingface()
     
-    data_path = Path(config.data_path)
-    data_path.parent.mkdir(parents=True, exist_ok=True)
+    
     exp_dir = setup_experiment_dir(config)
     config.output_dir = str(exp_dir)
-    data_df = pd.read_csv(config.data_path)
-    print(f"Loaded {len(data_df)} samples from {config.data_path}")
+    
+    
+    predict_data_path = Path(config.predict_data_path)
+    predict_data_path.parent.mkdir(parents=True, exist_ok=True)
+    predict_df = pd.read_csv(config.predict_data_path, sep="\t")
+    print(f"Loaded predict df: {len(predict_df)} samples from {config.predict_data_path}")
+    
+    glycans_data_path = Path(config.glycans_data_path)
+    glycans_data_path.parent.mkdir(parents=True, exist_ok=True)
+    glycans_df = pd.read_csv(config.glycans_data_path, sep="\t")
+    print(f"Loaded glycans df: {len(glycans_df)} samples from {config.glycans_data_path}")
+    
+    proteins_data_path = Path(config.proteins_data_path)
+    proteins_data_path.parent.mkdir(parents=True, exist_ok=True)
+    proteins_df = pd.read_csv(config.proteins_data_path, sep="\t")
+    print(f"Loaded proteins df: {len(proteins_df)} samples from {config.proteins_data_path}")
     
     # run the training experiment
     print("Starting training...")
     trainer = BindingTrainer(config)
-    trainer.train(data_df)
+    trainer.train(predict_df, glycans_df, proteins_df)
 
 if __name__ == "__main__":
     main()

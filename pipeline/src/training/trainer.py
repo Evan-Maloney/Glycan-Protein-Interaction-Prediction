@@ -200,7 +200,7 @@ class BindingTrainer:
         plt.savefig(plots_dir / 'pearson_curves.png')
         plt.close()
     
-    def train(self, data_df: pd.DataFrame):
+    def train(self, predict_df: pd.DataFrame, glycans_df: pd.DataFrame, proteins_df: pd.DataFrame):
         all_metrics = {
             'train_loss': [],
             'val_loss': [],
@@ -213,12 +213,16 @@ class BindingTrainer:
         }
         
         train_dataset, val_dataset = prepare_datasets(
-            data_df,
+            predict_df,
+            glycans_df,
+            proteins_df,
             self.config.val_split,
             self.glycan_encoder,
             self.protein_encoder,
         )
         
+        
+        # will have to change this to crossval instead
         train_loader = DataLoader(
             train_dataset,
             batch_size=self.config.batch_size,
