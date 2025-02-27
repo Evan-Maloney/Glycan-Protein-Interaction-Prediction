@@ -200,7 +200,7 @@ class BindingTrainer:
         plt.savefig(plots_dir / 'pearson_curves.png')
         plt.close()
     
-    def train(self, data_df: pd.DataFrame, precomputed_path: str = None):
+    def train(self, data_df: pd.DataFrame):
         all_metrics = {
             'train_loss': [],
             'val_loss': [],
@@ -217,7 +217,6 @@ class BindingTrainer:
             self.config.val_split,
             self.glycan_encoder,
             self.protein_encoder,
-            precomputed_path
         )
         
         train_loader = DataLoader(

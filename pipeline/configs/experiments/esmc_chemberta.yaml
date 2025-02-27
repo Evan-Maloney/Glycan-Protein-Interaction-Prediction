@@ -13,7 +13,6 @@ checkpoint_frequency: 5
 val_split: 0.2
 device: "cuda" # change to cuda when using a GPU instance
 hf_auth: True
-precomputed_path: null #"data/precomputed_data.pt"
 model_specific_params:
   dnn_hidden_dims: [512, 256, 128]
 
