@@ -1,6 +1,8 @@
 # required
 output_dir: "experiments"
-data_path: "data/binding_data_fake.csv"
+predict_data_path: "data/Fractions-Bound-Table.txt"
+glycans_data_path: "data/Glycan-Structures-CFG611.txt"
+proteins_data_path: "data/Protein-Sequence-Table.txt"
 glycan_encoder_type: "dummy"
 protein_encoder_type: "dummy"
 binding_predictor_type: "dummy"
