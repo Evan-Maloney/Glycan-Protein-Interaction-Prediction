@@ -37,7 +37,7 @@ class BindingTrainer:
         # build the param dictionary for the binding predictor
         predictor_params = {
             'glycan_dim': self.glycan_encoder.embedding_dim,
-            'protein_dim': 52
+            'protein_dim': self.protein_encoder.embedding_dim
         }
         if 'dnn_hidden_dims' in self.config.model_specific_params:
             predictor_params['hidden_dims'] = self.config.model_specific_params['dnn_hidden_dims']
@@ -216,7 +216,7 @@ class BindingTrainer:
             data_df,
             self.config.val_split,
             self.glycan_encoder,
-#            self.protein_encoder,
+            self.protein_encoder,
             precomputed_path
         )
         
