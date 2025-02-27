@@ -8,50 +8,39 @@ from ..base.encoders import GlycanEncoder, ProteinEncoder
 class BindingDataset(Dataset):
     def __init__(self, 
                  data_frame: pd.DataFrame,
-                 glycan_encoder: GlycanEncoder = None,
-                 protein_encoder: ProteinEncoder = None,
-                 precomputed_data: Dict[str, torch.Tensor] = None):
+                 glycan_encoder: GlycanEncoder,
+                 protein_encoder: ProteinEncoder):
         """
-        Dataset for glycan-protein binding data with precomputed embeddings
+        Dataset for glycan-protein binding data with encodings for unique molecules
         
         Args:
             data_frame: DataFrame with required columns
-            glycan_encoder: Encoder for glycan SMILES (only needed if not using precomputed data)
-            protein_encoder: Encoder for protein sequences (only needed if not using precomputed data)
-            precomputed_data: Dictionary containing precomputed embeddings (if available)
+            glycan_encoder: Encoder for glycan SMILES
+            protein_encoder: Encoder for protein sequences
         """
         self.df = data_frame
         
-        if precomputed_data is not None:
-            self.glycan_encodings = precomputed_data['glycan_encodings']
-            self.protein_encodings = precomputed_data['protein_encodings']
-            self.glycan_to_index = precomputed_data['glycan_to_index']
-            self.protein_to_index = precomputed_data['protein_to_index']
-        else:
-            if glycan_encoder is None or protein_encoder is None:
-                raise ValueError("Must provide either precomputed data or both encoders")
-            
-            # Compute the mappings and embeddings
-            self.glycan_to_index, self.glycan_encodings = self._precompute_unique_glycans(glycan_encoder)
-            self.protein_to_index, self.protein_encodings = self._precompute_unique_proteins(protein_encoder)
+        # Encode unique glycans and proteins
+        self.glycan_to_index, self.glycan_encodings = self._encode_unique_glycans(glycan_encoder)
+        self.protein_to_index, self.protein_encodings = self._encode_unique_proteins(protein_encoder)
     
-    def _precompute_unique_glycans(self, glycan_encoder: GlycanEncoder) -> Tuple[Dict[str, int], torch.Tensor]:
+    def _encode_unique_glycans(self, glycan_encoder: GlycanEncoder) -> Tuple[Dict[str, int], torch.Tensor]:
         """
-        Precompute embeddings for unique glycans in the dataset
+        Encode each unique glycan in the dataset once
         
         Args:
             glycan_encoder: Encoder for glycan SMILES
             
         Returns:
-            Tuple of (mapping from SMILE to index, tensor of glycan embeddings)
+            Tuple of (mapping from SMILE to index, tensor of glycan encodings)
         """
-        print("Precomputing unique glycan embeddings...")
+        print("Encoding unique glycans...")
         
         # Get unique glycan SMILES
         unique_glycans = self.df['Glycan SMILE'].unique()
         glycan_to_index = {smile: i for i, smile in enumerate(unique_glycans)}
         
-        # Compute embeddings for each unique glycan
+        # Encode each unique glycan
         glycan_encodings = []
         for smile in tqdm(unique_glycans):
             with torch.no_grad():
@@ -60,23 +49,23 @@ class BindingDataset(Dataset):
         
         return glycan_to_index, torch.stack(glycan_encodings)
     
-    def _precompute_unique_proteins(self, protein_encoder: ProteinEncoder) -> Tuple[Dict[str, int], torch.Tensor]:
+    def _encode_unique_proteins(self, protein_encoder: ProteinEncoder) -> Tuple[Dict[str, int], torch.Tensor]:
         """
-        Precompute embeddings for unique proteins in the dataset
+        Encode each unique protein in the dataset once
         
         Args:
             protein_encoder: Encoder for protein sequences
             
         Returns:
-            Tuple of (mapping from sequence to index, tensor of protein embeddings)
+            Tuple of (mapping from sequence to index, tensor of protein encodings)
         """
-        print("Precomputing unique protein embeddings...")
+        print("Encoding unique proteins...")
         
         # Get unique protein sequences
         unique_proteins = self.df['Protein Sequence'].unique()
         protein_to_index = {seq: i for i, seq in enumerate(unique_proteins)}
         
-        # Compute embeddings for unique proteins in batches
+        # Encode unique proteins in batches
         protein_encodings = []
         batch_size = 2  # Adjust based on your memory constraints
         
@@ -97,10 +86,10 @@ class BindingDataset(Dataset):
         return len(self.df)
     
     def __getitem__(self, idx) -> Dict[str, torch.Tensor]:
-        """Get precomputed embeddings and other data for an index"""
+        """Get encodings and other data for an index"""
         row = self.df.iloc[idx]
         
-        # Get the corresponding embedding using the mapping
+        # Get the corresponding encoding using the mapping
         glycan_idx = self.glycan_to_index[row['Glycan SMILE']]
         protein_idx = self.protein_to_index[row['Protein Sequence']]
         
@@ -110,28 +99,12 @@ class BindingDataset(Dataset):
             'concentration': torch.tensor([row['concentration']], dtype=torch.float32),
             'target': torch.tensor([row['fraction_bound']], dtype=torch.float32)
         }
-    
-    def save_precomputed_data(self, path: str):
-        """Save precomputed embeddings and mappings to disk"""
-        torch.save({
-            'glycan_encodings': self.glycan_encodings,
-            'protein_encodings': self.protein_encodings,
-            'glycan_to_index': self.glycan_to_index,
-            'protein_to_index': self.protein_to_index
-        }, path)
-    
-    @classmethod
-    def from_precomputed(cls, data_frame: pd.DataFrame, precomputed_path: str) -> 'BindingDataset':
-        """Create dataset from precomputed embeddings"""
-        precomputed_data = torch.load(precomputed_path)
-        return cls(data_frame, precomputed_data=precomputed_data)
 
 def prepare_datasets(
     df: pd.DataFrame,
     val_split: float,
-    glycan_encoder: GlycanEncoder = None,
-    protein_encoder: ProteinEncoder = None,
-    precomputed_path: str = None
+    glycan_encoder: GlycanEncoder,
+    protein_encoder: ProteinEncoder
 ) -> Tuple[Dataset, Dataset]:
     """
     Prepare train and validation datasets
@@ -139,19 +112,13 @@ def prepare_datasets(
     Args:
         df: Full dataset DataFrame
         val_split: Fraction of data to use for validation
-        glycan_encoder: Encoder for glycans (if not using precomputed)
-        protein_encoder: Encoder for proteins (if not using precomputed)
-        precomputed_path: Path to precomputed embeddings (if available)
+        glycan_encoder: Encoder for glycans
+        protein_encoder: Encoder for proteins
     
     Returns:
         Tuple of train and validation datasets
     """
-    if precomputed_path:
-        full_dataset = BindingDataset.from_precomputed(df, precomputed_path)
-    else:
-        if glycan_encoder is None or protein_encoder is None:
-            raise ValueError("Must provide either precomputed_path or both encoders")
-        full_dataset = BindingDataset(df, glycan_encoder, protein_encoder)
+    full_dataset = BindingDataset(df, glycan_encoder, protein_encoder)
     
     val_size = int(len(full_dataset) * val_split)
     train_size = len(full_dataset) - val_size
