@@ -14,10 +14,13 @@ class TrainingConfig:
     glycan_encoder_type: str
     protein_encoder_type: str
     binding_predictor_type: str
+    k_folds: int
     num_epochs: int
     batch_size: int
     learning_rate: float
     checkpoint_frequency: int
+    random_state: int
+    train_final_model: bool
     
     # optional parameters
     val_split: float = 0.2

@@ -224,15 +224,95 @@ def stratified_train_test_split(fractions_df, glycans_df, proteins_df, test_size
     return train_indices, test_indices
 
 
+def stratified_kfold_split(fractions_df, glycans_df, proteins_df, n_splits, random_state):
+    """
+    Create a stratified k-fold split where each fold:
+    1. Contains unique GlycanIDs and ProteinGroups not seen in training
+    2. Maintains the distribution of cluster_labels for both glycans and proteins
+    
+    Parameters:
+    -----------
+    fractions_df : pandas.DataFrame
+        DataFrame containing ['ObjId', 'ProteinGroup', 'Concentration', 'GlycanID', 'f']
+    glycans_df : pandas.DataFrame
+        DataFrame containing ['Name', 'cluster_label'] where Name maps to GlycanID
+    proteins_df : pandas.DataFrame
+        DataFrame containing ['ProteinGroup', 'cluster_label']
+    n_splits : int, default=5
+        Number of folds for cross-validation
+    random_state : int, default=42
+        Random seed for reproducibility
+    
+    Returns:
+    --------
+    fold_indices : list of tuples
+        List of (train_indices, test_indices) pairs for each fold
+    """
+    # Set random seed
+    np.random.seed(random_state)
+    
+    # Initialize a list to store fold indices
+    fold_indices = []
+    
+    # Create folds for glycans - using glycans_df directly as it contains unique glycan IDs
+    # glycan_folds = {0: [[0:20], [20:40], ...], 1: [[0:10], [10:20], ...], 2: [...]}
+    glycan_folds = {}
+    for cluster in glycans_df['cluster_label'].unique():
+        cluster_glycans = glycans_df[glycans_df['cluster_label'] == cluster]['Name'].tolist()
+        np.random.shuffle(cluster_glycans)
+        
+        # Create approximately equal sized groups
+        glycan_folds[cluster] = []
+        for i in range(n_splits):
+            start_idx = int(i * len(cluster_glycans) / n_splits)
+            end_idx = int((i + 1) * len(cluster_glycans) / n_splits)
+            glycan_folds[cluster].append(cluster_glycans[start_idx:end_idx])
+    
+    # Create folds for proteins - using proteins_df directly as it contains unique protein IDs
+    protein_folds = {}
+    for cluster in proteins_df['cluster_label'].unique():
+        cluster_proteins = proteins_df[proteins_df['cluster_label'] == cluster]['ProteinGroup'].tolist()
+        np.random.shuffle(cluster_proteins)
+        
+        # Create approximately equal sized groups
+        protein_folds[cluster] = []
+        for i in range(n_splits):
+            start_idx = int(i * len(cluster_proteins) / n_splits)
+            end_idx = int((i + 1) * len(cluster_proteins) / n_splits)
+            protein_folds[cluster].append(cluster_proteins[start_idx:end_idx])
+    
+    # Create folds for the full dataset
+    for fold_idx in range(n_splits):
+        # Collect test glycans and proteins for this fold
+        test_glycans = []
+        for cluster, fold_lists in glycan_folds.items():
+            test_glycans.extend(fold_lists[fold_idx])
+        
+        test_proteins = []
+        for cluster, fold_lists in protein_folds.items():
+            test_proteins.extend(fold_lists[fold_idx])
+        
+        # Create train and test masks for this fold
+        is_test = ((fractions_df['GlycanID'].isin(test_glycans)) | 
+                   (fractions_df['ProteinGroup'].isin(test_proteins)))
+        
+        test_indices = fractions_df[is_test].index
+        train_indices = fractions_df[~is_test].index
+        
+        fold_indices.append((train_indices, test_indices))
+    
+    return fold_indices
 
 
-def prepare_datasets(
-    predict_df: pd.DataFrame,
+
+def prepare_kfold_datasets(
+    fractions_df: pd.DataFrame,
     glycans_df: pd.DataFrame,
     proteins_df: pd.DataFrame,
-    val_split: float,
+    k_folds: float,
     glycan_encoder: GlycanEncoder,
-    protein_encoder: ProteinEncoder
+    protein_encoder: ProteinEncoder,
+    random_state: int
 ) -> Tuple[Dataset, Dataset]:
     """
     Prepare train and validation datasets
@@ -259,22 +339,53 @@ def prepare_datasets(
     proteins_df['cluster_label'] = 0
     
     
-    train_indices, val_indices = stratified_train_test_split(predict_df, glycans_df, proteins_df, val_split, random_state)
+    # for each glycan create a glycan_encoding feature where we use glycan_encoder to encode the SMILES
+    #glycans_df['glycan_encoding'] = glycans_df['SMILES'].apply(lambda smiles: glycan_encoder.encode_smiles(smiles))
+    encoded_glycan_tensors = glycan_encoder.encode_batch(glycans_df['SMILES'].tolist())
+    # idk if we leave encoded_glycan_tensors as a torch.Tensor or have to put to list to put in dataframe, might be more e3fficient to return as tensor then index match instead of putting in dataframe
+    glycans_df['glycan_encoding'] = list(encoded_glycan_tensors)
+    
+    
+    # for each protein create a protein_encoding feature where we use protein_encoder to encode the aminoacids
+    encoded_protein_tensors = protein_encoder.encode_batch(proteins_df['Amino Acid Sequence'].tolist())
+    proteins_df['protein_encoding'] = list(encoded_protein_tensors)
+    
+    
+    print('glycans:', len(glycans_df['glycan_encoding'].tolist()))
+    print('proteins:', len(proteins_df['protein_encoding'].tolist()))
+    
+    
+    #train_indices, val_indices = stratified_train_test_split(predict_df, glycans_df, proteins_df, val_split, random_state)
+    
+    full_indicies = stratified_kfold_split(fractions_df, glycans_df, proteins_df, k_folds, random_state)
+    
+
+    # combine all data into full_fractions_df
+    merged_df = pd.merge(
+        fractions_df,
+        glycans_df,
+        left_on='GlycanID',
+        right_on='Name',
+        how='left'
+    )
+    # now remove Name as we already have GlycanID
+    merged_df.drop('Name', axis=1, inplace=True)
+
+    full_fractions_df = pd.merge(
+        merged_df,
+        proteins_df,
+        on='ProteinGroup',
+        how='left',
+        suffixes=('', '_protein')  # so no mixup with duplicate column names
+    )
+
+    full_fractions_df = full_fractions_df.rename(columns={
+        'cluster_label': 'glycan_cluster_label',
+        'cluster_label_protein': 'protein_cluster_label',
+        'Concentration': 'concentration',
+        'f': 'target'
+    })
     
     
     
-    # Create PyTorch Subset objects
-    train_dataset = Subset(predict_df, train_indices)
-    val_dataset = Subset(predict_df, val_indices)
-    
-    
-    
-    #val_size = int(len(full_dataset) * val_split)
-    #train_size = len(full_dataset) - val_size
-    
-    #train_dataset, val_dataset = random_split(
-    #    full_dataset,
-    #    [train_size, val_size]
-    #)
-    
-    return train_dataset, val_dataset
+    return full_indicies, full_fractions_df
