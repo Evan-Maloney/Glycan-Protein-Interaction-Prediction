@@ -3,7 +3,7 @@ from typing import List
 from ...base.encoders import ProteinEncoder
 
 class DummyProteinEncoder(ProteinEncoder):
-    def __init__(self, embedding_dim: int = 256):
+    def __init__(self, embedding_dim: int = 128):
         super().__init__()
         self._embedding_dim = embedding_dim
     
