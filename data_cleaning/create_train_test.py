@@ -48,6 +48,9 @@ def cluster_proteins(proteins, n_clusters):
     
     
     def compute_protein_features(seq):
+
+        # Add reasoning for feature vectors
+        
         # Protein Analysis is a Tool from Biopython
         analysis = ProteinAnalysis(seq)
         features = {}
@@ -55,17 +58,21 @@ def cluster_proteins(proteins, n_clusters):
         # The following are Basic Features
         features['length'] = len(seq)
         features['mw'] = analysis.molecular_weight()
-        features['aromaticity'] = analysis.aromaticity()
         features['instability_index'] = analysis.instability_index()
 
         features['net_charge_pH7'] = analysis.charge_at_pH(7.0)
 
         aa_percent = analysis.get_amino_acids_percent()
-        
+
+        # Prompted ChatGPT to ask how to parse a
+        # N, Q, S, T: Polar Amino Acids, often involved in hydrogen bonding with glycans
+        # K, R: Basic Amino Acids, can form hydrogen bonds and electrostatic bonds
+        # D, E: Acidic Amino Acids, can interact with positively charged groups of glycans
         for aa in ['N', 'Q', 'S', 'T', 'K', 'R', 'D', 'E']:
             features[f'frac_{aa}'] = aa_percent.get(aa, 0.0)
 
     
+    # F, Y, W are aromatic amino acids which bind with glycans
         for aa in ['F', 'Y', 'W']:
             features[f'frac_{aa}'] = aa_percent.get(aa, 0.0)
             features['aromatic_binding_score'] = (
@@ -76,18 +83,7 @@ def cluster_proteins(proteins, n_clusters):
 
         features['aromaticity'] = analysis.aromaticity()
 
-        hydrophobicity_values = {
-            'A': 1.8,  'C': 2.5,  'D': -3.5, 'E': -3.5,
-            'F': 2.8,  'G': -0.4, 'H': -3.2, 'I': 4.5,
-            'K': -3.9, 'L': 3.8,  'M': 1.9,  'N': -3.5,
-            'P': -1.6, 'Q': -3.5, 'R': -4.5, 'S': -0.8,
-            'T': -0.7, 'V': 4.2,  'W': -0.9, 'Y': -1.3
-        }
-        if len(seq) > 0:
-            hydro_scores = [hydrophobicity_values.get(res, 0.0) for res in seq]
-            features['avg_hydrophobicity'] = np.mean(hydro_scores)
-        else:
-            features['avg_hydrophobicity'] = 0.0
+        features['hydrophobicity'] = analysis.gravy()
 
         return features
 
@@ -99,9 +95,6 @@ def cluster_proteins(proteins, n_clusters):
     # Select the feature columns (all columns from the feature extraction)
     feature_columns = features_df.columns.tolist()
     feature_data = proteins[feature_columns].values
-
-    # comput dist
-    dist_matrix = squareform(pdist(feature_data, metric='euclidean'))
 
     # apply k means clustering
     kmeans = KMeans(n_clusters=n_clusters, random_state=42)
@@ -200,7 +193,8 @@ def main():
     
     fractions = pd.read_csv('./data/Fractions-Bound-Table.txt', sep="\t")
     
-    test_size = 0.1
+    # 7% of each cluster and protein cluster class in the test set (at random_state=42 results in a ~15.229% test size)
+    test_size = 0.07
     random_state = 42
     
     train_data, test_data = stratified_train_test_split(fractions, glycans, proteins, test_size, random_state)

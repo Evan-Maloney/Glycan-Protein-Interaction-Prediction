@@ -18,69 +18,39 @@ from ..utils.metrics import calculate_metrics
 from ..utils.model_factory import create_binding_predictor, create_glycan_encoder, create_protein_encoder
 from ..data.dataset import prepare_kfold_datasets
 
-class FractionDataset(Dataset):
-    def __init__(self, dataframe):
-        self.data = dataframe
-    
+class GlycoProteinDataset(Dataset):
+    def __init__(self, fractions_df, glycan_encodings, protein_encodings, glycan_mapping, protein_mapping):
+        """
+        Args:
+            fractions_df: DataFrame with fraction data
+            glycan_encodings: Tensor of shape [n_glycans, embedding_dim]
+            protein_encodings: Tensor of shape [n_proteins, embedding_dim]
+            glycan_mapping: Dict mapping glycan IDs to indices in glycan_encodings
+            protein_mapping: Dict mapping protein IDs to indices in protein_encodings
+        """
+        self.fractions_df = fractions_df
+        self.glycan_encodings = glycan_encodings
+        self.protein_encodings = protein_encodings
+        self.glycan_mapping = glycan_mapping
+        self.protein_mapping = protein_mapping
+        
     def __len__(self):
-        return len(self.data)
+        return len(self.fractions_df)
     
     def __getitem__(self, idx):
-        # Get row by position, not by index
-        row = self.data.iloc[idx]
+        row = self.fractions_df.iloc[idx]
         
-        # Make sure all tensors are proper PyTorch tensors
-        glycan_encoding = torch.tensor(row['glycan_encoding'], dtype=torch.float32)
-        protein_encoding = torch.tensor(row['protein_encoding'], dtype=torch.float32)
-        
-        # Make sure scalars are proper Python types
-        concentration = float(row['concentration'])
-        target = float(row['target'])
+        # Get the corresponding encodings using the mappings
+        glycan_idx = self.glycan_mapping[row['GlycanID']]
+        protein_idx = self.protein_mapping[row['ProteinGroup']]
         
         return {
-            'glycan_encoding': glycan_encoding,
-            'protein_encoding': protein_encoding,
-            'concentration': torch.tensor([concentration], dtype=torch.float32),
-            'target': torch.tensor([target], dtype=torch.float32)
+            'glycan_encoding': self.glycan_encodings[glycan_idx],
+            'protein_encoding': self.protein_encodings[protein_idx],
+            'concentration': torch.tensor([row['Concentration']], dtype=torch.float32),
+            'target': torch.tensor([row['f']], dtype=torch.float32)
         }
-        
-def custom_collate(batch):
-    # Filter out items with invalid tensors
-    valid_items = []
-    for item in batch:
-        # Check if tensors are valid (have dimensions)
-        if (hasattr(item['glycan_encoding'], 'shape') and 
-            hasattr(item['protein_encoding'], 'shape') and
-            item['glycan_encoding'].dim() > 0 and 
-            item['protein_encoding'].dim() > 0):
-            valid_items.append(item)
-        else:
-            print(f"Skipping invalid item. Glycan: {item['glycan_encoding']}, Protein: {item['protein_encoding']}")
-    
-    if not valid_items:
-        print("Warning: Entire batch contained invalid items")
-        # Return a dummy batch or skip this batch
-        return None
-    
-    # Stack the valid items
-    try:
-        glycan_encodings = torch.stack([item['glycan_encoding'] for item in valid_items])
-        protein_encodings = torch.stack([item['protein_encoding'] for item in valid_items])
-        concentrations = torch.stack([item['concentration'] for item in valid_items])
-        targets = torch.stack([item['target'] for item in valid_items])
-        
-        return {
-            'glycan_encoding': glycan_encodings,
-            'protein_encoding': protein_encodings,
-            'concentration': concentrations,
-            'target': targets
-        }
-    except Exception as e:
-        print(f"Error during collation: {e}")
-        # Print shapes for debugging
-        for i, item in enumerate(valid_items):
-            print(f"Item {i}: glycan={item['glycan_encoding'].shape}, protein={item['protein_encoding'].shape}")
-        return None
+
 
 class BindingTrainer:
     def __init__(self, config: TrainingConfig):
@@ -118,13 +88,27 @@ class BindingTrainer:
             list(self.binding_predictor.parameters()),
             lr=self.config.learning_rate
         )
-        self.criterion = nn.MSELoss()
+        self.criterion = self.weighted_mse_loss #nn.MSELoss() 
+        
+    def weighted_mse_loss(self, predictions, targets, weight=None):
+        """
+        Weighted MSE loss
+        
+        Args:
+            predictions: Predicted values
+            targets: Target values
+            weight: Optional weight factor
+        """
+        if weight is None:
+            return nn.MSELoss()(predictions, targets)
+        else:
+            return (weight * (predictions - targets) ** 2).mean()
         
     def reset_models(self):
         """Reset all models to their initial state"""
         self.setup_models()
     
-    def _train_epoch(self, train_loader: DataLoader) -> Dict[str, float]:
+    def _train_epoch(self, train_loader: DataLoader, fold_weight: int) -> Dict[str, float]:
         self.glycan_encoder.train()
         self.protein_encoder.train()
         self.binding_predictor.train()
@@ -152,7 +136,7 @@ class BindingTrainer:
                 concentration
             )
             
-            loss = self.criterion(predictions, targets)
+            loss = self.criterion(predictions, targets, weight=fold_weight)
             
             # backward pass
             self.optimizer.zero_grad()
@@ -175,7 +159,7 @@ class BindingTrainer:
         
         return metrics
     
-    def _validate(self, val_loader: DataLoader) -> Dict[str, float]:
+    def _validate(self, val_loader: DataLoader, fold_weight: int) -> Dict[str, float]:
         self.glycan_encoder.eval()
         self.protein_encoder.eval()
         self.binding_predictor.eval()
@@ -198,7 +182,7 @@ class BindingTrainer:
                     concentration
                 )
 
-                loss = self.criterion(predictions, targets)
+                loss = self.criterion(predictions, targets, weight=fold_weight)
                 
                 # track totals
                 total_loss += loss.item()
@@ -334,7 +318,7 @@ class BindingTrainer:
             'timestamp': []
         }
         
-        fold_indices, full_fractions_df = prepare_kfold_datasets(
+        fold_indices, glycan_encodings, protein_encodings = prepare_kfold_datasets(
             fractions_df,
             glycans_df,
             proteins_df,
@@ -343,6 +327,10 @@ class BindingTrainer:
             self.protein_encoder,
             self.config.random_state
         )
+        
+        # {glycanID_123: 5, glycanID_432: 12, ...}
+        glycan_mapping = {name: idx for idx, name in enumerate(glycans_df['Name'])}
+        protein_mapping = {name: idx for idx, name in enumerate(proteins_df['ProteinGroup'])}
         
         
         # Set up metrics tracking
@@ -361,13 +349,26 @@ class BindingTrainer:
         # Tracking metrics per fold for visualization
         fold_specific_metrics = []
         
-        print(f"Starting {self.config.k_folds}-fold cross-validation with {len(full_fractions_df)} samples")
+        print(f"Starting {self.config.k_folds}-fold cross-validation on our total {len(fractions_df)} samples")
+        
+        # Calculate fold weights (inverse of train size -> the larger the validation set is, the more it contributes to our score, as more valition samples means more accurate error)
+        train_sizes = [len(train_samples) for train_samples, test_samples in fold_indices]
+        total_train_samples = sum(train_sizes)
+        fold_weights = [total_train_samples / (len(fold_indices) * train_size) for train_size in train_sizes]
         
         # For each fold
         for fold_idx, (train_idx, test_idx) in enumerate(fold_indices):
             # Get data for this fold
-            train_data = full_fractions_df.loc[train_idx]
-            val_data = full_fractions_df.loc[test_idx]
+            train_data = fractions_df.loc[train_idx]
+            val_data = fractions_df.loc[test_idx]
+            fold_weight = fold_weights[fold_idx]
+            
+            train_pytorch_dataset = GlycoProteinDataset(
+                train_data, glycan_encodings, protein_encodings, glycan_mapping, protein_mapping
+            )
+            val_pytorch_dataset = GlycoProteinDataset(
+                val_data, glycan_encodings, protein_encodings, glycan_mapping, protein_mapping
+            )
             
             
             print(f"\n{'='*20} Fold {fold_idx+1}/{self.config.k_folds} {'='*20}")
@@ -379,20 +380,21 @@ class BindingTrainer:
             
             # Create data loaders
             train_loader = DataLoader(
-                FractionDataset(train_data),
+                train_pytorch_dataset, #FractionDataset(train_data),
                 batch_size=self.config.batch_size,
-                shuffle=True,
-                collate_fn=custom_collate
+                shuffle=False, # dont need to shuffle as already shuffled in stratified_kfold_split()
+                #collate_fn=custom_collate
             )
             val_loader = DataLoader(
-                FractionDataset(val_data),
+                val_pytorch_dataset,#FractionDataset(val_data),
                 batch_size=self.config.batch_size,
-                shuffle=True,
-                collate_fn=custom_collate
+                shuffle=False, # dont need to shuffle as already shuffled in stratified_kfold_split()
+                #collate_fn=custom_collate
             )
             
-            print(f"Training with {len(train_data)} samples, "
-                  f"validating with {len(val_data)} samples")
+            print(f"Training with {len(train_data)} samples: ({(len(train_data) / (len(train_data) + len(val_data))) * 100:.2f}%), "
+                  f"validating with {len(val_data)} samples: ({(len(val_data) / (len(train_data) + len(val_data))) * 100:.2f}%), " 
+                  f"Fold weight: ~{fold_weight:.5f}")
             
             # Training loop for this fold
             fold_train_metrics = []
@@ -401,8 +403,8 @@ class BindingTrainer:
             for epoch in range(self.config.num_epochs):
                 print(f"\nEpoch {epoch + 1}/{self.config.num_epochs}")
                 
-                train_metrics = self._train_epoch(train_loader)
-                val_metrics = self._validate(val_loader)
+                train_metrics = self._train_epoch(train_loader, fold_weight)
+                val_metrics = self._validate(val_loader, fold_weight)
                 
                 # Save metrics for this fold
                 timestamp = datetime.now().isoformat()
@@ -491,9 +493,13 @@ class BindingTrainer:
             # Reset the models
             self.reset_models()
             
+            full_train_pytorch_dataset = GlycoProteinDataset(
+                fractions_df, glycan_encodings, protein_encodings, glycan_mapping, protein_mapping
+            )
+            
             # Create a data loader for all data
             full_loader = DataLoader(
-                full_fractions_df,
+                full_train_pytorch_dataset,
                 batch_size=self.config.batch_size,
                 shuffle=True
             )
