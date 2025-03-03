@@ -1,3 +1,5 @@
+# Claude 3.7 used to generate functions
+
 import pandas as pd
 import rdkit.Chem as Chem
 from rdkit.Chem import rdFingerprintGenerator
