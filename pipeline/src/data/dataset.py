@@ -1,3 +1,5 @@
+# Claude 3.7 used to generate functions
+
 import torch
 from torch.utils.data import Dataset, random_split, Subset
 import pandas as pd

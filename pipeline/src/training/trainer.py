@@ -126,7 +126,6 @@ class BindingTrainer:
             glycan_encoding = batch['glycan_encoding'].to(self.device)
             protein_encoding = batch['protein_encoding'].to(self.device)
             concentration = batch['concentration'].to(self.device)
-            # add all features here
             
             targets = batch['target'].to(self.device)
             
