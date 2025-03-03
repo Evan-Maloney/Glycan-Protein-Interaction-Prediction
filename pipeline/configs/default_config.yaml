@@ -6,8 +6,8 @@ proteins_data_path: "data/Protein-Sequence-Table.txt"
 glycan_encoder_type: "dummy"
 protein_encoder_type: "dummy"
 binding_predictor_type: "dummy"
-k_folds: 2
-num_epochs: 2
+k_folds: 8
+num_epochs: 10
 batch_size: 32
 learning_rate: 0.001
 checkpoint_frequency: 2

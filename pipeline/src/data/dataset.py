@@ -8,6 +8,7 @@ import numpy as np
 import rdkit.Chem as Chem
 from rdkit.Chem import rdFingerprintGenerator
 from scipy.spatial.distance import pdist, squareform
+from Bio.SeqUtils.ProtParam import ProteinAnalysis
 from sklearn.cluster import KMeans
 
 class BindingDataset(Dataset):
@@ -143,6 +144,64 @@ def cluster_glycans(glycans, radius, fp_size, n_clusters):
     glycans['cluster_label'] = labels
     
     return glycans
+
+def cluster_proteins(proteins, n_clusters):
+    
+    
+    def compute_protein_features(seq):
+
+        # Add reasoning for feature vectors
+        
+        # Protein Analysis is a Tool from Biopython
+        analysis = ProteinAnalysis(seq)
+        features = {}
+        
+        # The following are Basic Features
+        features['length'] = len(seq)
+        features['mw'] = analysis.molecular_weight()
+        features['instability_index'] = analysis.instability_index()
+
+        features['net_charge_pH7'] = analysis.charge_at_pH(7.0)
+
+        aa_percent = analysis.get_amino_acids_percent()
+
+        # Prompted ChatGPT to ask how to parse a
+        # N, Q, S, T: Polar Amino Acids, often involved in hydrogen bonding with glycans
+        # K, R: Basic Amino Acids, can form hydrogen bonds and electrostatic bonds
+        # D, E: Acidic Amino Acids, can interact with positively charged groups of glycans
+        for aa in ['N', 'Q', 'S', 'T', 'K', 'R', 'D', 'E']:
+            features[f'frac_{aa}'] = aa_percent.get(aa, 0.0)
+
+    
+    # F, Y, W are aromatic amino acids which bind with glycans
+        for aa in ['F', 'Y', 'W']:
+            features[f'frac_{aa}'] = aa_percent.get(aa, 0.0)
+            features['aromatic_binding_score'] = (
+            aa_percent.get('F', 0.0) +
+            aa_percent.get('Y', 0.0) +
+            aa_percent.get('W', 0.0)
+        )
+
+        features['aromaticity'] = analysis.aromaticity()
+
+        features['hydrophobicity'] = analysis.gravy()
+
+        return features
+
+    feature_dicts = proteins['Amino Acid Sequence'].apply(compute_protein_features)
+    features_df = pd.DataFrame(list(feature_dicts))
+
+    proteins = pd.concat([proteins, features_df], axis=1)
+    
+    # Select the feature columns (all columns from the feature extraction)
+    feature_columns = features_df.columns.tolist()
+    feature_data = proteins[feature_columns].values
+
+    # apply k means clustering
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    proteins['cluster_label'] = kmeans.fit_predict(feature_data)
+    
+    return proteins
 
 
 def stratified_train_test_split(fractions_df, glycans_df, proteins_df, test_size, random_state):
@@ -303,7 +362,25 @@ def stratified_kfold_split(fractions_df, glycans_df, proteins_df, n_splits, rand
     
     return fold_indices
 
-
+# this should be used instead inside /models dir file so each person can try their own encoding with own features
+def add_feature_to_encoding(encoding, feature_list):
+    """
+    Encode a batch of encoding with additional features
+    
+    Args:
+        encoding: tensor of encoding batch
+        feature_list: List of additional feature values (same height as encoding)
+    
+    Returns:
+        Tensor of shape [len(smiles_list), embedding_dim + n_features]
+    """
+    
+    features_tensor = torch.tensor(feature_list, dtype=torch.float32).view(-1, 1)  # Shape [n, 1]
+    
+    combined_encodings = torch.cat([encoding, features_tensor], dim=1)  # Shape [n, embedding_dim+1]
+    
+    return combined_encodings
+    
 
 def prepare_kfold_datasets(
     fractions_df: pd.DataFrame,
@@ -326,66 +403,24 @@ def prepare_kfold_datasets(
     Returns:
         Tuple of train and validation datasets
     """
-    #full_dataset = BindingDataset(df, glycan_encoder, protein_encoder)
     
-    # will move this to config
-    random_state = 42
+    # for each glycan create a glycan_encoding feature where we use glycan_encoder to encode the SMILES
+    # for each protein create a protein_encoding feature where we use protein_encoder to encode the aminoacids
+    glycan_encodings = glycan_encoder.encode_batch(glycans_df['SMILES'].tolist())
+    protein_encodings = protein_encoder.encode_batch(proteins_df['Amino Acid Sequence'].tolist())
+    
+    
+    # Might move to config but leave for now as our train and test are clusterd and stratified using these parameters
     radius = 3
     fp_size = 1024
     n_clusters = 3
     glycans_df = cluster_glycans(glycans_df, radius, fp_size, n_clusters)
     
-    #temp for now
-    proteins_df['cluster_label'] = 0
+    n_protein_clusters = 3
+    proteins_df = cluster_proteins(proteins_df, n_protein_clusters)
     
-    
-    # for each glycan create a glycan_encoding feature where we use glycan_encoder to encode the SMILES
-    #glycans_df['glycan_encoding'] = glycans_df['SMILES'].apply(lambda smiles: glycan_encoder.encode_smiles(smiles))
-    encoded_glycan_tensors = glycan_encoder.encode_batch(glycans_df['SMILES'].tolist())
-    # idk if we leave encoded_glycan_tensors as a torch.Tensor or have to put to list to put in dataframe, might be more e3fficient to return as tensor then index match instead of putting in dataframe
-    glycans_df['glycan_encoding'] = list(encoded_glycan_tensors)
-    
-    
-    # for each protein create a protein_encoding feature where we use protein_encoder to encode the aminoacids
-    encoded_protein_tensors = protein_encoder.encode_batch(proteins_df['Amino Acid Sequence'].tolist())
-    proteins_df['protein_encoding'] = list(encoded_protein_tensors)
-    
-    
-    print('glycans:', len(glycans_df['glycan_encoding'].tolist()))
-    print('proteins:', len(proteins_df['protein_encoding'].tolist()))
-    
-    
-    #train_indices, val_indices = stratified_train_test_split(predict_df, glycans_df, proteins_df, val_split, random_state)
-    
+    # need to cluster both glycans and proteins so that we can create a stratified k-fold split for training 
     full_indicies = stratified_kfold_split(fractions_df, glycans_df, proteins_df, k_folds, random_state)
     
-
-    # combine all data into full_fractions_df
-    merged_df = pd.merge(
-        fractions_df,
-        glycans_df,
-        left_on='GlycanID',
-        right_on='Name',
-        how='left'
-    )
-    # now remove Name as we already have GlycanID
-    merged_df.drop('Name', axis=1, inplace=True)
-
-    full_fractions_df = pd.merge(
-        merged_df,
-        proteins_df,
-        on='ProteinGroup',
-        how='left',
-        suffixes=('', '_protein')  # so no mixup with duplicate column names
-    )
-
-    full_fractions_df = full_fractions_df.rename(columns={
-        'cluster_label': 'glycan_cluster_label',
-        'cluster_label_protein': 'protein_cluster_label',
-        'Concentration': 'concentration',
-        'f': 'target'
-    })
     
-    
-    
-    return full_indicies, full_fractions_df
+    return full_indicies, glycan_encodings, protein_encodings
