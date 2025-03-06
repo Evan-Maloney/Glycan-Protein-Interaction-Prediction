@@ -342,9 +342,10 @@ def stratified_kfold_split(fractions_df, glycans_df, proteins_df, n_splits, rand
             end_idx = int((i + 1) * len(cluster_proteins) / n_splits)
             protein_folds[cluster].append(cluster_proteins[start_idx:end_idx])
     
-    # Create folds for the full dataset
+    # for each fold: 0, 1, 2, ... k-1 (k iterations)
     for fold_idx in range(n_splits):
         # Collect test glycans and proteins for this fold
+        # test_glycans = [cluster_0_fold_fold_idx + cluster_1_fold_fold_idx + cluster_2_fold_fold_idx]
         test_glycans = []
         for cluster, fold_lists in glycan_folds.items():
             test_glycans.extend(fold_lists[fold_idx])
@@ -353,7 +354,9 @@ def stratified_kfold_split(fractions_df, glycans_df, proteins_df, n_splits, rand
         for cluster, fold_lists in protein_folds.items():
             test_proteins.extend(fold_lists[fold_idx])
         
-        # Create train and test masks for this fold
+        # if one of the test_glycans OR one of the test_proteins is in this sample then put it in test, otherwise put it in train
+        # becuase of this functionality we need a larger k_fold (something like 8) to get a test_size of around 20% as the OR operation grabs a lot of samples if the test_glycans and test_proteins is high
+        # ex: k_fold=2: test_glycans=[50% of our glycans], test_proteins=[50% of our proteins] --> 50% of glycans OR 50% of proteins ~= 80% samples. (This creates a test set of size 80%)
         is_test = ((fractions_df['GlycanID'].isin(test_glycans)) | 
                    (fractions_df['ProteinGroup'].isin(test_proteins)))
         
@@ -361,6 +364,12 @@ def stratified_kfold_split(fractions_df, glycans_df, proteins_df, n_splits, rand
         train_indices = fractions_df[~is_test].index
         
         fold_indices.append((train_indices, test_indices))
+    
+    
+    # fold_indicies at K_fold=2 = [
+    #   fold_1: (train_indicies, test_indicies), -> (the_rest, [1/k*total_glycans OR 1/k*total_proteins]) (first half of proteins and glycans in test set)
+    #   fold_2: (train_indicies, test_indicies), -> (the_rest, [1/k*total_glycans OR 1/k*total_proteins]) (SECOND half of proteins and glycans in test set)
+    #]
     
     return fold_indices
 
