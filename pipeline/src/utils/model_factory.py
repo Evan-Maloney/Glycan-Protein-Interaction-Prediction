@@ -6,7 +6,8 @@ from ..models.binding_predictors.dummy import DummyBindingPredictor
 from ..models.binding_predictors.dnn import DNNBindingPredictor
 from ..models.protein_encoders.esmc import ESMCEncoder
 from ..models.protein_encoders.ankh import AnkhEncoder
-from ..models.protein_encoders.prostt5 import ProstT5Encoder
+from ..models.protein_encoders.prostT5 import ProstT5Encoder
+from ..models.protein_encoders.feature import FeatureBasedProteinEncoder
 
 
 def create_glycan_encoder(encoder_type: str, **kwargs) -> Any:
@@ -26,6 +27,7 @@ def create_protein_encoder(encoder_type: str, **kwargs) -> Any:
         'esmc': ESMCEncoder,
         'ankh': AnkhEncoder,
         'prostt5': ProstT5Encoder,
+        'feature': FeatureBasedProteinEncoder,
     }
 
     encoder = encoders[encoder_type]
