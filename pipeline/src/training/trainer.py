@@ -50,7 +50,13 @@ class GlycoProteinDataset(Dataset):
             'concentration': torch.tensor([row['Concentration']], dtype=torch.float32),
             'target': torch.tensor([row['f']], dtype=torch.float32)
         }
-
+        
+# https://stackoverflow.com/a/74801406
+class weighted_MSELoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+    def forward(self,inputs,targets,weights):
+        return ((inputs - targets)**2 ) * weights
 
 class BindingTrainer:
     def __init__(self, config: TrainingConfig):
@@ -88,7 +94,7 @@ class BindingTrainer:
             list(self.binding_predictor.parameters()),
             lr=self.config.learning_rate
         )
-        self.criterion = self.weighted_mse_loss #nn.MSELoss() 
+        self.criterion = nn.MSELoss() #weighted_MSELoss() #self.weighted_mse_loss #nn.MSELoss() 
         
     def weighted_mse_loss(self, predictions, targets, weight=None):
         """
@@ -102,7 +108,7 @@ class BindingTrainer:
         if weight is None:
             return nn.MSELoss()(predictions, targets)
         else:
-            return (weight * (predictions - targets) ** 2).mean()
+            return (weight * ((predictions - targets) ** 2)).mean()
         
     def reset_models(self):
         """Reset all models to their initial state"""
@@ -135,12 +141,19 @@ class BindingTrainer:
                 concentration
             )
             
-            loss = self.criterion(predictions, targets, weight=fold_weight)
+            loss = self.criterion(predictions, targets)#, fold_weight)
             
-            # backward pass
+            # average out loss across the batch
+            loss = loss.mean()
+            
+            
+            # reset gradients to zero
             self.optimizer.zero_grad()
-            loss.backward()
+            # perform backpropigation to calculate the gradients we need to improve model
+            loss.backward(retain_graph=True)
+            # update the weights with our loss gradients
             self.optimizer.step()
+            
             
             # track totals
             total_loss += loss.item()
@@ -181,7 +194,7 @@ class BindingTrainer:
                     concentration
                 )
 
-                loss = self.criterion(predictions, targets, weight=fold_weight)
+                loss = self.criterion(predictions, targets)#, fold_weight).mean()
                 
                 # track totals
                 total_loss += loss.item()
