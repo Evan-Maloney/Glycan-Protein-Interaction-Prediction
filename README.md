@@ -35,6 +35,8 @@ conda install -c conda-forge rdkit
 conda install ipykernel
 
 conda install conda-forge::biopython
+
+conda install pytorch::pytorch
 ```
 
 Run this to see all the packages installed in your current enviornment. Look for pandas, rdkit, ipykernel. (The rest of the packages are dependencies of these packages that were installed as well)
