@@ -4,7 +4,7 @@ predict_data_path: "data/Train_Fractions.csv"
 glycans_data_path: "data/Glycan-Structures-CFG611.txt"
 proteins_data_path: "data/Protein-Sequence-Table.txt"
 glycan_encoder_type: "chemberta"
-protein_encoder_type: "esmc"
+protein_encoder_type: "ankh"
 binding_predictor_type: "dnn"
 k_folds: 8
 num_epochs: 10
