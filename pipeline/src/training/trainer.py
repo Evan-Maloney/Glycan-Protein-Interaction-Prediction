@@ -56,6 +56,9 @@ class weighted_MSELoss(nn.Module):
     def __init__(self):
         super().__init__()
     def forward(self,inputs,targets,weights):
+        #print('targets before', targets)
+        #targets = torch.log(1+targets)
+        #print('targets after', targets)
         return ((inputs - targets)**2 ) * weights
 
 class BindingTrainer:
@@ -94,7 +97,7 @@ class BindingTrainer:
             list(self.binding_predictor.parameters()),
             lr=self.config.learning_rate
         )
-        self.criterion = nn.MSELoss() #weighted_MSELoss() #self.weighted_mse_loss #nn.MSELoss() 
+        self.criterion = weighted_MSELoss() #self.weighted_mse_loss #nn.MSELoss() 
         
     def weighted_mse_loss(self, predictions, targets, weight=None):
         """
@@ -135,13 +138,25 @@ class BindingTrainer:
             
             targets = batch['target'].to(self.device)
             
+            
+            if self.config.log_predict:
+                #print('targets before BEFORE', targets)
+                #old_targets = targets.clone().detach()
+                #print('targets before', old_targets)
+                #targets = torch.log1p(targets)
+                targets = torch.log(targets + 1e-6)
+                #print('targets after', targets)
+            
             predictions = self.binding_predictor(
                 glycan_encoding,
                 protein_encoding,
                 concentration
             )
             
-            loss = self.criterion(predictions, targets)#, fold_weight)
+            #print('***predictions***')
+            #print(predictions)
+            
+            loss = self.criterion(predictions, targets, fold_weight)
             
             # average out loss across the batch
             loss = loss.mean()
@@ -154,6 +169,10 @@ class BindingTrainer:
             # update the weights with our loss gradients
             self.optimizer.step()
             
+            # revert predictions and targets to original values for original analysis if using log transform
+            if self.config.log_predict:
+                predictions = torch.exp(predictions) - 1e-6 #torch.expm1(predictions)
+                targets = torch.exp(targets) - 1e-6 #torch.expm1(targets)
             
             # track totals
             total_loss += loss.item()
@@ -188,13 +207,21 @@ class BindingTrainer:
                 concentration = batch['concentration'].to(self.device)
                 targets = batch['target'].to(self.device)
                 
+                if self.config.log_predict:
+                    targets = torch.log(targets + 1e-6)#torch.log1p(targets)
+                
                 predictions = self.binding_predictor(
                     glycan_encoding,
                     protein_encoding,
                     concentration
                 )
 
-                loss = self.criterion(predictions, targets)#, fold_weight).mean()
+                loss = self.criterion(predictions, targets, fold_weight).mean()
+                
+                # revert predictions and targets to original values for original analysis if using log transform
+                if self.config.log_predict:
+                    predictions = torch.exp(predictions) - 1e-6 #torch.expm1(predictions)
+                    targets = torch.exp(targets) - 1e-6 #torch.expm1(targets)
                 
                 # track totals
                 total_loss += loss.item()
@@ -337,7 +364,8 @@ class BindingTrainer:
             self.config.k_folds,
             self.glycan_encoder,
             self.protein_encoder,
-            self.config.random_state
+            self.config.random_state,
+            self.config.split_mode
         )
         
         # {glycanID_123: 5, glycanID_432: 12, ...}
@@ -370,6 +398,11 @@ class BindingTrainer:
         
         # For each fold
         for fold_idx, (train_idx, test_idx) in enumerate(fold_indices):
+            
+            if len(test_idx) == 0:
+                print('test set size empty so skipping (try different k-fold)')
+                continue
+            
             # Get data for this fold
             train_data = fractions_df.loc[train_idx]
             val_data = fractions_df.loc[test_idx]

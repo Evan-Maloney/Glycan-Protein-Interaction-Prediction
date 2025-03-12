@@ -12,7 +12,10 @@ batch_size: 32
 learning_rate: 0.001
 checkpoint_frequency: 2
 train_final_model: False # if want to train and save the model on the best found params from cross val usinmg the entire training set.
+log_predict: True # tranform our target to log(1+target) (log1p()) so that we dont train the model to predict all zeros (reverted on predictions output with expm1())
+
 random_state: 42
+split_mode: 'AND'
 # optional
 val_split: 0.2
 device: "cpu"
