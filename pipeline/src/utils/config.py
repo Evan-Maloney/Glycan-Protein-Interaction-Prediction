@@ -14,8 +14,6 @@ class TrainingConfig:
     glycan_encoder_type: str
     protein_encoder_type: str
     binding_predictor_type: str
-    split_mode: str
-    k_folds: int
     num_epochs: int
     batch_size: int
     learning_rate: float
@@ -23,8 +21,11 @@ class TrainingConfig:
     random_state: int
     log_predict: bool
     train_final_model: bool
+    use_kfold: bool
+    split_mode: str
     # optional parameters
     val_split: float = 0.2
+    k_folds: int = 1
     device: str = "cuda"  # or "cpu"
     model_specific_params: Dict = field(default_factory=dict)
     hf_auth: Optional[bool] = None

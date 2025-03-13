@@ -453,3 +453,53 @@ def prepare_kfold_datasets(
     
     
     return full_indicies, glycan_encodings, protein_encodings
+
+def prepare_train_val_datasets(
+    fractions_df: pd.DataFrame,
+    glycans_df: pd.DataFrame,
+    proteins_df: pd.DataFrame,
+    glycan_encoder: GlycanEncoder,
+    protein_encoder: ProteinEncoder,
+    random_state: int,
+    split_mode: str,
+    use_kfolds: bool,
+    k_folds: float,
+    val_split: float
+) -> Tuple[Dataset, Dataset]:
+    """
+    Prepare train and validation datasets
+    
+    Args:
+        df: Full dataset DataFrame
+        val_split: Fraction of data to use for validation
+        glycan_encoder: Encoder for glycans
+        protein_encoder: Encoder for proteins
+    
+    Returns:
+        Tuple of train and validation datasets
+    """
+    
+    # for each glycan create a glycan_encoding feature where we use glycan_encoder to encode the SMILES
+    # for each protein create a protein_encoding feature where we use protein_encoder to encode the aminoacids
+    glycan_encodings = glycan_encoder.encode_batch(glycans_df['SMILES'].tolist())
+    protein_encodings = protein_encoder.encode_batch(proteins_df['Amino Acid Sequence'].tolist())
+    
+    
+    # Might move to config but leave for now as our train and test are clusterd and stratified using these parameters
+    radius = 3
+    fp_size = 1024
+    n_clusters = 3
+    glycans_df = cluster_glycans(glycans_df, radius, fp_size, n_clusters)
+    
+    n_protein_clusters = 3
+    proteins_df = cluster_proteins(proteins_df, n_protein_clusters)
+    
+    if use_kfolds:
+        # need to cluster both glycans and proteins so that we can create a stratified k-fold split for training 
+        full_indicies = stratified_kfold_split(fractions_df, glycans_df, proteins_df, k_folds, random_state, split_mode)
+    else:
+        train_indicies, test_indicies = stratified_train_test_split(fractions_df, glycans_df, proteins_df, val_split, random_state, split_mode)
+        # convert to kfold format so we can use the same code
+        full_indicies = [(train_indicies, test_indicies)]
+    
+    return full_indicies, glycan_encodings, protein_encodings
