@@ -60,14 +60,14 @@ class BioPyProteinEncoder(ProteinEncoder):
         
         return torch.tensor(features, dtype=torch.float32)
     
-    def encode_sequence(self, sequence: str) -> torch.Tensor:
-        features = torch.tensor(self._extract_features(sequence), dtype=torch.float32)
+    def encode_sequence(self, sequence: str, device: torch.device) -> torch.Tensor:
+        features = torch.tensor(self._extract_features(sequence), dtype=torch.float32).to(device)
         return self.linear(features)
     
-    def encode_batch(self, batch_data: List[str]) -> torch.Tensor:
-        batch_features = [self.encode_sequence(seq) for seq in batch_data]
+    def encode_batch(self, batch_data: List[str], device: torch.device) -> torch.Tensor:
+        batch_features = [self.encode_sequence(seq, device) for seq in batch_data]
         batch = torch.stack(batch_features, dim=0)
-        return batch
+        return batch.to(device)
     
     @property
     def embedding_dim(self) -> int:
