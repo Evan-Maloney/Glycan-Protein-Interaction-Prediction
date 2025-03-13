@@ -12,6 +12,7 @@ from ..models.protein_encoders.biopy import BioPyProteinEncoder
 from ..models.binding_predictors.dnn import DNNBindingPredictor
 from ..models.protein_encoders.esmc import ESMCEncoder
 
+from ..models.protein_encoders.pt_gnn import AdvancedGNNProteinEncoder
 
 
 
@@ -33,6 +34,7 @@ def create_protein_encoder(encoder_type: str, **kwargs) -> Any:
         'dummy': DummyProteinEncoder,
         'esmc': ESMCEncoder,
         'biopy': BioPyProteinEncoder,
+        'pt_gnn': AdvancedGNNProteinEncoder
     }
 
     encoder = encoders[encoder_type]
@@ -42,7 +44,7 @@ def create_protein_encoder(encoder_type: str, **kwargs) -> Any:
 def create_binding_predictor(predictor_type: str, **kwargs) -> Any:
     predictors = {
         'dummy': DummyBindingPredictor,
-        'dnn': DNNBindingPredictor
+        'dnn': DNNBindingPredictor,
     }
     
     predictor = predictors[predictor_type]
