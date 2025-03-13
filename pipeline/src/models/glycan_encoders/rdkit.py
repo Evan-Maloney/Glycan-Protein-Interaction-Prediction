@@ -43,17 +43,17 @@ class RDKITGlycanEncoder(GlycanEncoder):
         
         self.linear = torch.nn.Linear(len(self.features), self._embedding_dim)
     
-    def encode_smiles(self, smiles: str) -> torch.Tensor:
+    def encode_smiles(self, smiles: str, device: torch.device) -> torch.Tensor:
         mol = Chem.MolFromSmiles(smiles)
         
-        features = torch.tensor([feature_func(mol) for feature_func in self.features], dtype=torch.float32)
+        features = torch.tensor([feature_func(mol) for feature_func in self.features], dtype=torch.float32).to(device)
         return self.linear(features)
     
-    def encode_batch(self, batch_data: List[str]) -> torch.Tensor:
+    def encode_batch(self, batch_data: List[str], device: torch.device) -> torch.Tensor:
         
-        batch_features = [self.encode_smiles(smiles) for smiles in batch_data]
+        batch_features = [self.encode_smiles(smiles, device) for smiles in batch_data]
         # stack each feature as a row
-        batch = torch.stack(batch_features, dim=0)
+        batch = torch.stack(batch_features, dim=0).to(device)
         
         return batch
     

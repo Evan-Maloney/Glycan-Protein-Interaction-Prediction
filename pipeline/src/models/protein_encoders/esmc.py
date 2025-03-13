@@ -11,7 +11,7 @@ class ESMCEncoder(ProteinEncoder):
         self.model.eval()
         self._embedding_dim = self.model.embed.embedding_dim
     
-    def encode_sequence(self, sequence: str) -> torch.Tensor:
+    def encode_sequence(self, sequence: str, device: torch.device) -> torch.Tensor:
         protein = ESMProtein(sequence=sequence)
         
         with torch.no_grad():
@@ -26,7 +26,7 @@ class ESMCEncoder(ProteinEncoder):
         
         return embedding
     
-    def encode_batch(self, batch_data: List[str]) -> torch.Tensor:
+    def encode_batch(self, batch_data: List[str], device: torch.device) -> torch.Tensor:
         # Create all protein objects at once
         proteins = [ESMProtein(sequence=seq) for seq in batch_data]
         
@@ -37,8 +37,8 @@ class ESMCEncoder(ProteinEncoder):
             # Create the sequence_id mask for padding
             sequence_id = (tokens != self.model.tokenizer.pad_token_id)
 
-            tokens = tokens.to("cuda")
-            sequence_id = sequence_id.to("cuda")
+            tokens = tokens.to(device)
+            sequence_id = sequence_id.to(device)
 
             
             # Forward pass through the model with the batch
