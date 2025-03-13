@@ -8,6 +8,8 @@ import numpy as np
 from Bio.SeqUtils.ProtParam import ProteinAnalysis
 from ...base.encoders import ProteinEncoder
 
+"This was created in combination of Claude 3.7, https://www.datacamp.com/tutorial/comprehensive-introduction-graph-neural-networks-gnns-tutorial and Maxym's Glycan GNN"
+
 class AdvancedGNNProteinEncoder(ProteinEncoder):
     """
     Advanced Graph Neural Network-based Protein Encoder that incorporates:
