@@ -5,11 +5,11 @@ glycans_data_path: "data/Glycan-Structures-CFG611.txt"
 proteins_data_path: "data/Protein-Sequence-Table.txt"
 glycan_encoder_type: "dummy"
 protein_encoder_type: "dummy"
-binding_predictor_type: "dummy"
-num_epochs: 10
+binding_predictor_type: "mean"
+num_epochs: 5
 batch_size: 32
-learning_rate: 0.005
-checkpoint_frequency: 3 # every nth epoch save the model weights (in this example every 3rd epoch so saves at epoch 3, 6, 9, ...)
+learning_rate: 0.001
+checkpoint_frequency: 2 # every nth epoch save the model weights (in this example every 2nd epoch so saves at epoch 2, 4, 6, ...)
 train_final_model: False # if want to train and save the model on the best found params from cross val usinmg the entire training set.
 log_predict: True # tranform our target to log(1+target) (log1p()) so that we dont train the model to predict all zeros (reverted on predictions output with expm1())
 random_state: 42

@@ -14,6 +14,8 @@ from ..models.protein_encoders.esmc import ESMCEncoder
 
 from ..models.protein_encoders.pt_gnn import AdvancedGNNProteinEncoder
 
+from ..models.binding_predictors.mean_predictor import MeanPredictor
+
 
 
 def create_glycan_encoder(encoder_type: str, **kwargs) -> Any:
@@ -45,6 +47,7 @@ def create_binding_predictor(predictor_type: str, **kwargs) -> Any:
     predictors = {
         'dummy': DummyBindingPredictor,
         'dnn': DNNBindingPredictor,
+        'mean': MeanPredictor
     }
     
     predictor = predictors[predictor_type]
