@@ -65,10 +65,16 @@ class BindingTrainer:
     def __init__(self, config: TrainingConfig):
         self.config = config
         self.device = torch.device(config.device)
+        
+        torch.manual_seed(self.config.random_state)
+        
         self.experiment_dir = Path(config.output_dir)
         self.setup_models()
+        
     
     def setup_models(self):
+        
+        
         # create the models using the factory functions
         self.glycan_encoder = create_glycan_encoder(
             self.config.glycan_encoder_type,
