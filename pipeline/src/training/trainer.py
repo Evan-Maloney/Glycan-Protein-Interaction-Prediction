@@ -371,7 +371,8 @@ class BindingTrainer:
             self.config.split_mode,
             self.config.use_kfold,
             self.config.k_folds,
-            self.config.val_split
+            self.config.val_split,
+            self.config.device
         )
         
         

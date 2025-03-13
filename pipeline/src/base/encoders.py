@@ -12,7 +12,7 @@ from typing import List
 
 class GlycanEncoder(nn.Module, ABC):
     @abstractmethod
-    def encode_smiles(self, smiles: str) -> torch.Tensor:
+    def encode_smiles(self, smiles: str, device: torch.device) -> torch.Tensor:
         """
         Encode a SMILES string to a fixed-length tensor
         
@@ -25,7 +25,7 @@ class GlycanEncoder(nn.Module, ABC):
         pass
     
     @abstractmethod
-    def encode_batch(self, batch_data: List[str]) -> torch.Tensor:
+    def encode_batch(self, batch_data: List[str], device: torch.device) -> torch.Tensor:
         """
         Encode a batch of SMILES strings
         
@@ -50,7 +50,7 @@ class GlycanEncoder(nn.Module, ABC):
 
 class ProteinEncoder(nn.Module, ABC):
     @abstractmethod
-    def encode_sequence(self, sequence: str) -> torch.Tensor:
+    def encode_sequence(self, sequence: str, device: torch.device) -> torch.Tensor:
         """
         Encode an amino acid sequence to a fixed-length tensor
         
@@ -63,7 +63,7 @@ class ProteinEncoder(nn.Module, ABC):
         pass
     
     @abstractmethod
-    def encode_batch(self, batch_data: List[str]) -> torch.Tensor:
+    def encode_batch(self, batch_data: List[str], device: torch.device) -> torch.Tensor:
         """
         Encode a batch of amino acid sequences
         

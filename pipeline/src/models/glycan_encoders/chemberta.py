@@ -16,7 +16,7 @@ class ChemBERTaEncoder(GlycanEncoder):
         self.model.eval()
         self._embedding_dim = self.model.config.hidden_size
     
-    def encode_smiles(self, smiles: str) -> torch.Tensor:
+    def encode_smiles(self, smiles: str, device: torch.device) -> torch.Tensor:
         inputs = self.tokenizer(smiles, return_tensors="pt", padding=True, truncation=True)
         inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
         
@@ -28,9 +28,9 @@ class ChemBERTaEncoder(GlycanEncoder):
         
         return embedding
     
-    def encode_batch(self, batch_data: List[str]) -> torch.Tensor:
+    def encode_batch(self, batch_data: List[str], device: torch.device) -> torch.Tensor:
         inputs = self.tokenizer(batch_data, return_tensors="pt", padding=True, truncation=True)
-        inputs = {k: v.to("cuda") for k, v in inputs.items()}
+        inputs = {k: v.to(device) for k, v in inputs.items()}
         
         with torch.no_grad():
             outputs = self.model(**inputs)

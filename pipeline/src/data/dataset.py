@@ -464,7 +464,8 @@ def prepare_train_val_datasets(
     split_mode: str,
     use_kfolds: bool,
     k_folds: float,
-    val_split: float
+    val_split: float,
+    device: torch.device
 ) -> Tuple[Dataset, Dataset]:
     """
     Prepare train and validation datasets
@@ -481,8 +482,8 @@ def prepare_train_val_datasets(
     
     # for each glycan create a glycan_encoding feature where we use glycan_encoder to encode the SMILES
     # for each protein create a protein_encoding feature where we use protein_encoder to encode the aminoacids
-    glycan_encodings = glycan_encoder.encode_batch(glycans_df['SMILES'].tolist())
-    protein_encodings = protein_encoder.encode_batch(proteins_df['Amino Acid Sequence'].tolist())
+    glycan_encodings = glycan_encoder.encode_batch(glycans_df['SMILES'].tolist(), device)
+    protein_encodings = protein_encoder.encode_batch(proteins_df['Amino Acid Sequence'].tolist(), device)
     
     
     # Might move to config but leave for now as our train and test are clusterd and stratified using these parameters
