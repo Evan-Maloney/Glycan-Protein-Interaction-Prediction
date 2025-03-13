@@ -16,7 +16,7 @@ from tqdm import tqdm
 from ..utils.config import TrainingConfig
 from ..utils.metrics import calculate_metrics
 from ..utils.model_factory import create_binding_predictor, create_glycan_encoder, create_protein_encoder
-from ..data.dataset import prepare_kfold_datasets
+from ..data.dataset import prepare_train_val_datasets
 
 class GlycoProteinDataset(Dataset):
     def __init__(self, fractions_df, glycan_encodings, protein_encodings, glycan_mapping, protein_mapping):
@@ -208,7 +208,7 @@ class BindingTrainer:
                 targets = batch['target'].to(self.device)
                 
                 if self.config.log_predict:
-                    targets = torch.log(targets + 1e-6)#torch.log1p(targets)
+                    targets = torch.log(targets + 1e-6) #torch.log1p(targets)
                 
                 predictions = self.binding_predictor(
                     glycan_encoding,
@@ -258,6 +258,8 @@ class BindingTrainer:
             checkpoint_name = f"model_fold_{fold}_epoch_{epoch}.pt"
         elif fold is not None:
             checkpoint_name = f"model_fold_{fold}_final.pt"
+        elif epoch is not None:
+            checkpoint_name = f"model_epoch_{epoch}.pt"
         else:
             checkpoint_name = "model_final.pt"
             
@@ -346,6 +348,8 @@ class BindingTrainer:
             plt.close()
     
     def train(self, fractions_df: pd.DataFrame, glycans_df: pd.DataFrame, proteins_df: pd.DataFrame):
+        
+        # common metrics tracking
         all_metrics = {
             'train_loss': [],
             'val_loss': [],
@@ -357,53 +361,47 @@ class BindingTrainer:
             'timestamp': []
         }
         
-        fold_indices, glycan_encodings, protein_encodings = prepare_kfold_datasets(
+        fold_indices, glycan_encodings, protein_encodings = prepare_train_val_datasets(
             fractions_df,
             glycans_df,
             proteins_df,
-            self.config.k_folds,
             self.glycan_encoder,
             self.protein_encoder,
             self.config.random_state,
-            self.config.split_mode
+            self.config.split_mode,
+            self.config.use_kfold,
+            self.config.k_folds,
+            self.config.val_split
         )
         
-        # {glycanID_123: 5, glycanID_432: 12, ...}
+        
+        # Create mappings
         glycan_mapping = {name: idx for idx, name in enumerate(glycans_df['Name'])}
         protein_mapping = {name: idx for idx, name in enumerate(proteins_df['ProteinGroup'])}
         
-        
-        # Set up metrics tracking
+        # Tracking metrics
         fold_metrics = []
-        all_metrics = {
-            'train_loss': [],
-            'val_loss': [],
-            'train_mse': [],
-            'val_mse': [],
-            'train_pearson': [],
-            'val_pearson': [],
-            'epoch': [],
-            'timestamp': []
-        }
-        
-        # Tracking metrics per fold for visualization
         fold_specific_metrics = []
         
-        print(f"Starting {self.config.k_folds}-fold cross-validation on our total {len(fractions_df)} samples")
+        if self.config.use_kfold:
+            print(f"Starting {self.config.k_folds}-fold cross-validation on our total {len(fractions_df)} samples")
+            
+            # Calculate fold weights
+            train_sizes = [len(train_samples) for train_samples, test_samples in fold_indices]
+            total_train_samples = sum(train_sizes)
+            fold_weights = [total_train_samples / (len(fold_indices) * train_size) for train_size in train_sizes]
+        else:
+            print(f"Starting regular training with {len(fold_indices[0][0])} training samples and {len(fold_indices[0][1])} validation samples")
+            fold_weights = [1.0]  # No special weighting for regular training
         
-        # Calculate fold weights (inverse of train size -> the larger the validation set is, the more it contributes to our score, as more valition samples means more accurate error)
-        train_sizes = [len(train_samples) for train_samples, test_samples in fold_indices]
-        total_train_samples = sum(train_sizes)
-        fold_weights = [total_train_samples / (len(fold_indices) * train_size) for train_size in train_sizes]
-        
-        # For each fold
+        # For each fold (or single split for regular training)
         for fold_idx, (train_idx, test_idx) in enumerate(fold_indices):
             
             if len(test_idx) == 0:
-                print('test set size empty so skipping (try different k-fold)')
+                print('Test set size empty so skipping (try different split or k-fold)')
                 continue
             
-            # Get data for this fold
+            # Get data for this fold/split
             train_data = fractions_df.loc[train_idx]
             val_data = fractions_df.loc[test_idx]
             fold_weight = fold_weights[fold_idx]
@@ -415,43 +413,45 @@ class BindingTrainer:
                 val_data, glycan_encodings, protein_encodings, glycan_mapping, protein_mapping
             )
             
+            if self.config.use_kfold:
+                print(f"\n{'='*20} Fold {fold_idx+1}/{self.config.k_folds} {'='*20}")
+            else:
+                print(f"\n{'='*20} Training Run {'='*20}")
             
-            print(f"\n{'='*20} Fold {fold_idx+1}/{self.config.k_folds} {'='*20}")
-            
-            # Reset models for this fold
+            # Reset models for this fold/run
             self.reset_models()
-            
-
             
             # Create data loaders
             train_loader = DataLoader(
-                train_pytorch_dataset, #FractionDataset(train_data),
+                train_pytorch_dataset,
                 batch_size=self.config.batch_size,
-                shuffle=False, # dont need to shuffle as already shuffled in stratified_kfold_split()
-                #collate_fn=custom_collate
+                shuffle=True,
             )
             val_loader = DataLoader(
-                val_pytorch_dataset,#FractionDataset(val_data),
+                val_pytorch_dataset,
                 batch_size=self.config.batch_size,
-                shuffle=False, # dont need to shuffle as already shuffled in stratified_kfold_split()
-                #collate_fn=custom_collate
+                shuffle=True,
             )
             
             print(f"Training with {len(train_data)} samples: ({(len(train_data) / (len(train_data) + len(val_data))) * 100:.2f}%), "
-                  f"validating with {len(val_data)} samples: ({(len(val_data) / (len(train_data) + len(val_data))) * 100:.2f}%), " 
-                  f"Fold weight: ~{fold_weight:.5f}")
+                  f"validating with {len(val_data)} samples: ({(len(val_data) / (len(train_data) + len(val_data))) * 100:.2f}%)")
+                  
+            if self.config.use_kfold:
+                print(f"Fold weight: ~{fold_weight:.5f}")
             
-            # Training loop for this fold
+            # Training loop for this fold/run
             fold_train_metrics = []
             fold_val_metrics = []
             
             for epoch in range(self.config.num_epochs):
                 print(f"\nEpoch {epoch + 1}/{self.config.num_epochs}")
                 
+                # if no k-fold then fold_weight is just 1
                 train_metrics = self._train_epoch(train_loader, fold_weight)
                 val_metrics = self._validate(val_loader, fold_weight)
+
                 
-                # Save metrics for this fold
+                # Save metrics for this fold/run
                 timestamp = datetime.now().isoformat()
                 fold_train_metrics.append(train_metrics)
                 fold_val_metrics.append(val_metrics)
@@ -473,19 +473,26 @@ class BindingTrainer:
                       f"Val Loss: {val_metrics['loss']:.4f}")
                 
                 if (epoch + 1) % self.config.checkpoint_frequency == 0:
-                    self.save_checkpoint(fold=fold_idx, epoch=epoch)
+                    if self.config.use_kfold:
+                        self.save_checkpoint(fold=fold_idx, epoch=epoch+1)
+                    else:
+                        self.save_checkpoint(epoch=epoch+1)
             
-            # Save final model for this fold
-            self.save_checkpoint(fold=fold_idx)
+            # Save final model for this fold/run
+            if self.config.use_kfold:
+                self.save_checkpoint(fold=fold_idx)
+            else:
+                self.save_checkpoint()
             
-            # Record metrics from this fold
+            # Record metrics from this fold/run
             fold_metrics.append({
                 'fold': fold_idx,
                 'train_metrics': fold_train_metrics,
                 'val_metrics': fold_val_metrics
             })
         
-        # Calculate average metrics across all folds
+        # For k-fold, calculate average metrics across all folds
+        # For regular training, this will just process the single "fold"
         for epoch in range(self.config.num_epochs):
             epoch_metrics = {
                 'train_loss': 0,
@@ -506,8 +513,9 @@ class BindingTrainer:
                 epoch_metrics['val_pearson'] += fold_data['val_metrics'][epoch]['pearson']
             
             # Calculate average
+            folds_count = len(fold_metrics)
             for key in epoch_metrics:
-                epoch_metrics[key] /= self.config.k_folds
+                epoch_metrics[key] /= folds_count
             
             # Store average metrics
             all_metrics['train_loss'].append(epoch_metrics['train_loss'])
@@ -553,12 +561,13 @@ class BindingTrainer:
             for epoch in range(self.config.num_epochs):
                 print(f"\nEpoch {epoch + 1}/{self.config.num_epochs}")
                 
-                train_metrics = self._train_epoch(full_loader)
+                # Use default weight for final model training
+                train_metrics = self._train_epoch(full_loader, 1.0)
                 
                 print(f"Train Loss: {train_metrics['loss']:.4f}")
                 
                 if (epoch + 1) % self.config.checkpoint_frequency == 0:
-                    self.save_checkpoint(epoch=epoch)
+                    self.save_checkpoint(epoch=epoch+1)
             
             # Save the final model
             self.save_checkpoint()
