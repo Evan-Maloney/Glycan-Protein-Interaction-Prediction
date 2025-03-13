@@ -9,11 +9,11 @@ class DummyGlycanEncoder(GlycanEncoder):
         super().__init__()
         self._embedding_dim = embedding_dim
     
-    def encode_smiles(self, smiles: str) -> torch.Tensor:
-        return torch.randn(self._embedding_dim)
+    def encode_smiles(self, smiles: str, device: torch.device) -> torch.Tensor:
+        return torch.randn(self._embedding_dim).to(device)
     
-    def encode_batch(self, batch_data: List[str]) -> torch.Tensor:
-        return torch.randn(len(batch_data), self._embedding_dim)
+    def encode_batch(self, batch_data: List[str], device: torch.device) -> torch.Tensor:
+        return torch.randn(len(batch_data), self._embedding_dim).to(device)
     
     @property
     def embedding_dim(self) -> int:
