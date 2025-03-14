@@ -15,7 +15,7 @@ class AnkhEncoder(ProteinEncoder):
         self.model.eval()
         self._embedding_dim = self.model.config.d_model
     
-    def encode_sequence(self, sequence: str) -> torch.Tensor:
+    def encode_sequence(self, sequence: str, device: torch.device) -> torch.Tensor:
         # Get tokens for sequence
         protein = list(sequence)
         
@@ -26,16 +26,18 @@ class AnkhEncoder(ProteinEncoder):
             return_tensors="pt",
         )
         
+        input_ids = outputs["input_ids"].to(device)
+        attention_mask = outputs["attention_mask"].to(device)
         with torch.no_grad():
             embeddings = self.model(
-                input_ids=outputs["input_ids"],
-                attention_mask=outputs["attention_mask"],
+                input_ids=input_ids,
+                attention_mask=attention_mask,
             )
         # Mean pool over sequence length for each protein
         # embeddings.last_hidden_state shape: [1, seq_length, embedding_dim]
         return embeddings.last_hidden_state.squeeze(0).mean(dim=0)
     
-    def encode_batch(self, batch_data: List[str]) -> torch.Tensor:
+    def encode_batch(self, batch_data: List[str], device: torch.device) -> torch.Tensor:
         protein_sequences = [list(sequence) for sequence in batch_data]
         
         # Get tokens for all sequences
@@ -45,10 +47,12 @@ class AnkhEncoder(ProteinEncoder):
                                 is_split_into_words=True, 
                                 return_tensors="pt")
         
+        input_ids = outputs["input_ids"].to(device)
+        attention_mask = outputs["attention_mask"].to(device)
         with torch.no_grad():
             embeddings = self.model(
-                input_ids=outputs['input_ids'], 
-                attention_mask=outputs['attention_mask']
+                input_ids=input_ids, 
+                attention_mask=attention_mask
             )
         # Mean pool over sequence length for each protein
         # embeddings.last_hidden_state shape: [batch_size, seq_length, embedding_dim]

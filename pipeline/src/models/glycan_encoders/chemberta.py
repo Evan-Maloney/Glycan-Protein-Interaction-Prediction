@@ -18,7 +18,7 @@ class ChemBERTaEncoder(GlycanEncoder):
     
     def encode_smiles(self, smiles: str, device: torch.device) -> torch.Tensor:
         inputs = self.tokenizer(smiles, return_tensors="pt", padding=True, truncation=True)
-        inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+        inputs = {k: v.to(device) for k, v in inputs.items()}
         
         with torch.no_grad():
             outputs = self.model(**inputs)
