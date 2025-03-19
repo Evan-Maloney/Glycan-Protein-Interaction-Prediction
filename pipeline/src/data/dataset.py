@@ -272,7 +272,6 @@ def stratified_train_test_split(fractions_df, glycans_df, proteins_df, test_size
         selected = np.random.choice(cluster_proteins, size=min(target_count, len(cluster_proteins)), replace=False)
         test_proteins.extend(selected)
         
-        
     if mode == 'AND':
         
         is_test = ((fractions_df['GlycanID'].isin(test_glycans)) & 
@@ -482,7 +481,8 @@ def prepare_train_val_datasets(
     
     # for each glycan create a glycan_encoding feature where we use glycan_encoder to encode the SMILES
     # for each protein create a protein_encoding feature where we use protein_encoder to encode the aminoacids
-    glycan_encodings = glycan_encoder.encode_batch(glycans_df['SMILES'].tolist(), device)
+    glycan_representation = getattr(glycan_encoder, "representation", "SMILES")
+    glycan_encodings = glycan_encoder.encode_batch(glycans_df[glycan_representation].tolist(), device)
     protein_encodings = protein_encoder.encode_batch(proteins_df['Amino Acid Sequence'].tolist(), device)
     
     

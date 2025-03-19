@@ -2,6 +2,7 @@ from typing import Dict, Any
 from ..models.glycan_encoders.dummy import DummyGlycanEncoder
 from ..models.glycan_encoders.chemberta import ChemBERTaEncoder
 from ..models.glycan_encoders.rdkit import RDKITGlycanEncoder
+from ..models.glycan_encoders.sweetnet import SweetNetEncoder
 from ..models.protein_encoders.dummy import DummyProteinEncoder
 from ..models.binding_predictors.dummy import DummyBindingPredictor
 from ..models.binding_predictors.dnn import DNNBindingPredictor
@@ -17,7 +18,8 @@ def create_glycan_encoder(encoder_type: str, **kwargs) -> Any:
     encoders = {
         'dummy': DummyGlycanEncoder,
         'chemberta': ChemBERTaEncoder,
-        'rdkit': RDKITGlycanEncoder
+        'rdkit': RDKITGlycanEncoder,
+        'sweetnet': SweetNetEncoder,
     }
     
     encoder = encoders[encoder_type]
