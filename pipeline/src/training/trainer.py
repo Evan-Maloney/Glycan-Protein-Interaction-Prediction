@@ -657,7 +657,11 @@ class BindingTrainer:
             'protein_encoder_type', 
             'binding_predictor_type',
             'best_train_loss', 
-            'best_val_loss'
+            'best_val_loss',
+            'best_train_mse',
+            'best_val_mse',
+            'best_train_pearson',
+            'best_val_pearson',
         ]
         print(updated_results[summary_columns].to_string())
         
