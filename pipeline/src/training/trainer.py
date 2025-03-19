@@ -1,3 +1,8 @@
+# References:
+# https://github.com/victoresque/pytorch-template/blob/master/base/base_trainer.py
+# Used GitHub Copilot to generate parts of this script (I provided the pytorch base_trainer as a prompt)
+# Used Claude 3.7 to update to cross val
+
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader, Dataset
@@ -436,12 +441,12 @@ class BindingTrainer:
             plt.close()
     
     def train(self, fractions_df: pd.DataFrame, glycans_df: pd.DataFrame, proteins_df: pd.DataFrame):
-        # Log experiment configuration
-        config_path = self.experiment_dir / 'config.txt'
-        with open(config_path, 'w') as f:
-            f.write(f"Experiment ID: {self.experiment_id}\n")
-            for key, value in vars(self.config).items():
-                f.write(f"{key}: {value}\n")
+        # # Log experiment configuration
+        # config_path = self.experiment_dir / 'config.txt'
+        # with open(config_path, 'w') as f:
+        #     f.write(f"Experiment ID: {self.experiment_id}\n")
+        #     for key, value in vars(self.config).items():
+        #         f.write(f"{key}: {value}\n")
         
         # common metrics tracking
         all_metrics = {
