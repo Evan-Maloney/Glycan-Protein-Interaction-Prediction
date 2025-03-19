@@ -1,8 +1,3 @@
-# References:
-# https://github.com/victoresque/pytorch-template/blob/master/base/base_trainer.py
-# Used GitHub Copilot to generate parts of this script (I provided the pytorch base_trainer as a prompt)
-# Used Claude 3.7 to update to cross val
-
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader, Dataset
@@ -11,12 +6,112 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from typing import Dict, Tuple
 from datetime import datetime
+import uuid
 from tqdm import tqdm
 
 from ..utils.config import TrainingConfig
 from ..utils.metrics import calculate_metrics
 from ..utils.model_factory import create_binding_predictor, create_glycan_encoder, create_protein_encoder
 from ..data.dataset import prepare_train_val_datasets
+
+class ExperimentTracker:
+    """
+    Class to track experiment results across multiple runs with different configurations.
+    """
+    def __init__(self, base_dir="experiments"):
+        self.base_dir = Path(base_dir)
+        self.results_file = self.base_dir / "experiment_results.csv"
+        
+        # Create the results file if it doesn't exist
+        if not self.results_file.exists():
+            self._create_results_file()
+        
+    def _create_results_file(self):
+        """Initialize the results file with column headers."""
+        # Make sure the directory exists
+        self.base_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create empty dataframe with appropriate columns
+        columns = [
+            'experiment_id',
+            'glycan_encoder_type',
+            'protein_encoder_type',
+            'binding_predictor_type',
+            'batch_size',
+            'learning_rate',
+            'log_predict',
+            'split_mode',
+            'use_kfold',
+            'k_folds',
+            'best_train_loss',
+            'best_val_loss',
+            'best_train_mse',
+            'best_val_mse',
+            'best_train_pearson',
+            'best_val_pearson',
+            'best_epoch',
+            'timestamp'
+        ]
+        
+        df = pd.DataFrame(columns=columns)
+        df.to_csv(self.results_file, index=False)
+        
+    def add_experiment_result(self, experiment_id, config, metrics_df):
+        """
+        Add results from a completed experiment to the results table.
+        
+        Args:
+            experiment_id: Unique identifier for the experiment
+            config: TrainingConfig object with experiment settings
+            metrics_df: DataFrame containing the metrics history
+        """
+        # Find the best validation metrics (usually the lowest validation loss)
+        best_idx = metrics_df['val_loss'].idxmin()
+        best_metrics = metrics_df.iloc[best_idx]
+        
+        # Create a new row for the results table
+        result = {
+            'experiment_id': experiment_id,
+            'glycan_encoder_type': config.glycan_encoder_type,
+            'protein_encoder_type': config.protein_encoder_type,
+            'binding_predictor_type': config.binding_predictor_type,
+            'batch_size': config.batch_size,
+            'learning_rate': config.learning_rate,
+            'log_predict': config.log_predict,
+            'split_mode': config.split_mode,
+            'use_kfold': config.use_kfold,
+            'k_folds': config.k_folds if config.use_kfold else None,
+            'best_train_loss': best_metrics['train_loss'],
+            'best_val_loss': best_metrics['val_loss'],
+            'best_train_mse': best_metrics['train_mse'],
+            'best_val_mse': best_metrics['val_mse'],
+            'best_train_pearson': best_metrics['train_pearson'],
+            'best_val_pearson': best_metrics['val_pearson'],
+            'best_epoch': best_metrics['epoch'],
+            'timestamp': best_metrics['timestamp']
+        }
+        
+        # Load existing results
+        try:
+            results_df = pd.read_csv(self.results_file)
+        except Exception:
+            # If there's an issue with the file, recreate it
+            self._create_results_file()
+            results_df = pd.read_csv(self.results_file)
+        
+        # Add the new result and save
+        results_df = pd.concat([results_df, pd.DataFrame([result])], ignore_index=True)
+        results_df.to_csv(self.results_file, index=False)
+        
+        return results_df
+    
+    def get_results_table(self):
+        """Get the current results table as a DataFrame."""
+        try:
+            return pd.read_csv(self.results_file)
+        except Exception:
+            self._create_results_file()
+            return pd.read_csv(self.results_file)
 
 class GlycoProteinDataset(Dataset):
     def __init__(self, fractions_df, glycan_encodings, protein_encodings, glycan_mapping, protein_mapping):
@@ -56,9 +151,6 @@ class weighted_MSELoss(nn.Module):
     def __init__(self):
         super().__init__()
     def forward(self,inputs,targets,weights):
-        #print('targets before', targets)
-        #targets = torch.log(1+targets)
-        #print('targets after', targets)
         return ((inputs - targets)**2 ) * weights
 
 class BindingTrainer:
@@ -69,12 +161,17 @@ class BindingTrainer:
         torch.manual_seed(self.config.random_state)
         
         self.experiment_dir = Path(config.output_dir)
-        self.setup_models()
         
+        # Generate a unique experiment ID
+        self.experiment_id = str(uuid.uuid4())[:8]  # Using first 8 chars of UUID
+        
+        # Initialize the experiment tracker
+        base_dir = str(Path(config.output_dir).parent)  # Use parent of the experiment dir for results table
+        self.tracker = ExperimentTracker(base_dir)
+        
+        self.setup_models()
     
     def setup_models(self):
-        
-        
         # create the models using the factory functions
         self.glycan_encoder = create_glycan_encoder(
             self.config.glycan_encoder_type,
@@ -132,26 +229,16 @@ class BindingTrainer:
         all_predictions = []
         all_targets = []
         
-  
-        
         pbar = tqdm(train_loader, desc='Training')
         for batch in pbar:
-            
-        
             glycan_encoding = batch['glycan_encoding'].to(self.device)
             protein_encoding = batch['protein_encoding'].to(self.device)
             concentration = batch['concentration'].to(self.device)
             
             targets = batch['target'].to(self.device)
             
-            
             if self.config.log_predict:
-                #print('targets before BEFORE', targets)
-                #old_targets = targets.clone().detach()
-                #print('targets before', old_targets)
-                #targets = torch.log1p(targets)
                 targets = torch.log(targets + 1e-6)
-                #print('targets after', targets)
             
             predictions = self.binding_predictor(
                 glycan_encoding,
@@ -159,14 +246,10 @@ class BindingTrainer:
                 concentration
             )
             
-            #print('***predictions***')
-            #print(predictions)
-            
             loss = self.criterion(predictions, targets, fold_weight)
             
             # average out loss across the batch
             loss = loss.mean()
-            
             
             # reset gradients to zero
             self.optimizer.zero_grad()
@@ -244,7 +327,6 @@ class BindingTrainer:
         metrics['loss'] = total_loss / len(val_loader)
         
         return metrics
-    
     
     def save_checkpoint(self, fold: int = None, epoch: int = None):
         # https://pytorch.org/tutorials/beginner/saving_loading_models.html
@@ -354,6 +436,12 @@ class BindingTrainer:
             plt.close()
     
     def train(self, fractions_df: pd.DataFrame, glycans_df: pd.DataFrame, proteins_df: pd.DataFrame):
+        # Log experiment configuration
+        config_path = self.experiment_dir / 'config.txt'
+        with open(config_path, 'w') as f:
+            f.write(f"Experiment ID: {self.experiment_id}\n")
+            for key, value in vars(self.config).items():
+                f.write(f"{key}: {value}\n")
         
         # common metrics tracking
         all_metrics = {
@@ -380,7 +468,6 @@ class BindingTrainer:
             self.config.val_split,
             self.config.device
         )
-        
         
         # Create mappings
         glycan_mapping = {name: idx for idx, name in enumerate(glycans_df['Name'])}
@@ -541,6 +628,28 @@ class BindingTrainer:
         # Save the fold-specific metrics
         fold_metrics_df = pd.DataFrame(fold_specific_metrics)
         fold_metrics_df.to_csv(self.experiment_dir / 'fold_metrics.csv', index=False)
+        
+        # Add experiment results to the tracker
+        updated_results = self.tracker.add_experiment_result(
+            self.experiment_id, 
+            self.config, 
+            metrics_df
+        )
+        
+        # Print out the updated results table for easy reference
+        print("\n=== Updated Experiment Results ===")
+        summary_columns = [
+            'experiment_id', 
+            'glycan_encoder_type', 
+            'protein_encoder_type', 
+            'binding_predictor_type',
+            'best_train_loss', 
+            'best_val_loss'
+        ]
+        print(updated_results[summary_columns].to_string())
+        
+        # Save a copy of the results in this experiment's directory for reference
+        updated_results.to_csv(self.experiment_dir / 'experiment_results.csv', index=False)
         
         # Plot the metrics
         self.plot_metrics(metrics_df, fold_metrics_df)
