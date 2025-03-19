@@ -650,7 +650,7 @@ class BindingTrainer:
         
         # Save a copy of the results in this experiment's directory for reference
         updated_results.to_csv(self.experiment_dir / 'experiment_results.csv', index=False)
-        updated_results[summary_columns].to_csv('experiment_summarys.csv', index=False)
+        updated_results[summary_columns].to_csv('experiments_summary.csv', index=False)
         
         # Plot the metrics
         self.plot_metrics(metrics_df, fold_metrics_df)
