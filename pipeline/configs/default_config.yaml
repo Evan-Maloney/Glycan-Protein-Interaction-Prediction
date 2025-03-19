@@ -17,7 +17,7 @@ random_state: 42
 use_kfold: False # recomended to not use kfold if using split_mode AND as the splitting % vary greatly
 split_mode: 'AND'
 # optional
-val_split: 0.2
+val_split: 0.5
 k_folds: 3
 device: "cpu"
 model_specific_params: {}
