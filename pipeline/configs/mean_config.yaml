@@ -6,7 +6,7 @@ proteins_data_path: "data/Protein-Sequence-Table.txt"
 glycan_encoder_type: "dummy"
 protein_encoder_type: "dummy"
 binding_predictor_type: "mean"
-num_epochs: 5
+num_epochs: 1
 batch_size: 32
 learning_rate: 0.001
 checkpoint_frequency: 2 # every nth epoch save the model weights (in this example every 2nd epoch so saves at epoch 2, 4, 6, ...)
