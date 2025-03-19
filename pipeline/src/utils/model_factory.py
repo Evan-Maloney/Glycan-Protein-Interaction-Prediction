@@ -1,15 +1,23 @@
 from typing import Dict, Any
+
 from ..models.glycan_encoders.dummy import DummyGlycanEncoder
 from ..models.glycan_encoders.chemberta import ChemBERTaEncoder
 from ..models.glycan_encoders.rdkit import RDKITGlycanEncoder
+from ..models.glycan_encoders.gnn import GNNGlycanEncoder
+
 from ..models.glycan_encoders.sweetnet import SweetNetEncoder
 from ..models.protein_encoders.dummy import DummyProteinEncoder
 from ..models.binding_predictors.dummy import DummyBindingPredictor
+from ..models.protein_encoders.biopy import BioPyProteinEncoder
+
 from ..models.binding_predictors.dnn import DNNBindingPredictor
 from ..models.protein_encoders.esmc import ESMCEncoder
+
 from ..models.protein_encoders.ankh import AnkhEncoder
 from ..models.protein_encoders.prostt5 import ProstT5Encoder
-from ..models.protein_encoders.biopy import BioPyProteinEncoder
+from ..models.protein_encoders.pt_gnn import AdvancedGNNProteinEncoder
+
+from ..models.binding_predictors.mean_predictor import MeanPredictor
 
 
 
@@ -19,6 +27,7 @@ def create_glycan_encoder(encoder_type: str, **kwargs) -> Any:
         'dummy': DummyGlycanEncoder,
         'chemberta': ChemBERTaEncoder,
         'rdkit': RDKITGlycanEncoder,
+        'gnn': GNNGlycanEncoder,
         'sweetnet': SweetNetEncoder,
     }
     
@@ -33,6 +42,7 @@ def create_protein_encoder(encoder_type: str, **kwargs) -> Any:
         'ankh': AnkhEncoder,
         'prostt5': ProstT5Encoder,
         'biopy': BioPyProteinEncoder,
+        'pt_gnn': AdvancedGNNProteinEncoder
     }
 
     encoder = encoders[encoder_type]
@@ -42,7 +52,8 @@ def create_protein_encoder(encoder_type: str, **kwargs) -> Any:
 def create_binding_predictor(predictor_type: str, **kwargs) -> Any:
     predictors = {
         'dummy': DummyBindingPredictor,
-        'dnn': DNNBindingPredictor
+        'dnn': DNNBindingPredictor,
+        'mean': MeanPredictor
     }
     
     predictor = predictors[predictor_type]

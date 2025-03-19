@@ -3,9 +3,9 @@ output_dir: "experiments"
 predict_data_path: "data/Train_Fractions.csv"
 glycans_data_path: "data/Glycan-Structures-CFG611.txt"
 proteins_data_path: "data/Protein-Sequence-Table.txt"
-glycan_encoder_type: "dummy"
-protein_encoder_type: "dummy"
-binding_predictor_type: "dummy"
+glycan_encoder_type: "gnn"
+protein_encoder_type: "esmc"
+binding_predictor_type: "dnn"
 num_epochs: 10
 batch_size: 32
 learning_rate: 0.005
