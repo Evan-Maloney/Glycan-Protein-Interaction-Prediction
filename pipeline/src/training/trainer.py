@@ -156,6 +156,9 @@ class weighted_MSELoss(nn.Module):
     def __init__(self):
         super().__init__()
     def forward(self,inputs,targets,weights):
+        #print('targets before', targets)
+        #targets = torch.log(1+targets)
+        #print('targets after', targets)
         return ((inputs - targets)**2 ) * weights
 
 class BindingTrainer:
@@ -166,14 +169,11 @@ class BindingTrainer:
         torch.manual_seed(self.config.random_state)
         
         self.experiment_dir = Path(config.output_dir)
-        
-        # Generate a unique experiment ID
+
         self.experiment_id = str(uuid.uuid4())[:8]  # Using first 8 chars of UUID
-        
-        # Initialize the experiment tracker
         base_dir = str(Path(config.output_dir).parent)  # Use parent of the experiment dir for results table
         self.tracker = ExperimentTracker(base_dir)
-        
+
         self.setup_models()
     
     def setup_models(self):
@@ -243,13 +243,21 @@ class BindingTrainer:
             targets = batch['target'].to(self.device)
             
             if self.config.log_predict:
+                #print('targets before BEFORE', targets)
+                #old_targets = targets.clone().detach()
+                #print('targets before', old_targets)
+                #targets = torch.log1p(targets)
                 targets = torch.log(targets + 1e-6)
+                #print('targets after', targets)
             
             predictions = self.binding_predictor(
                 glycan_encoding,
                 protein_encoding,
                 concentration
             )
+
+            #print('***predictions***')
+            #print(predictions)
             
             loss = self.criterion(predictions, targets, fold_weight)
             
