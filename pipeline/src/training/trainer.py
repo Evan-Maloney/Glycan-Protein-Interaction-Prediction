@@ -474,6 +474,7 @@ class BindingTrainer:
             proteins_df,
             self.glycan_encoder,
             self.protein_encoder,
+            self.config.glycan_type,
             self.config.random_state,
             self.config.split_mode,
             self.config.use_kfold,
