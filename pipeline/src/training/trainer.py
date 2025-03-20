@@ -11,12 +11,112 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from typing import Dict, Tuple
 from datetime import datetime
+import uuid
 from tqdm import tqdm
 
 from ..utils.config import TrainingConfig
 from ..utils.metrics import calculate_metrics
 from ..utils.model_factory import create_binding_predictor, create_glycan_encoder, create_protein_encoder
-from ..data.dataset import prepare_kfold_datasets
+from ..data.dataset import prepare_train_val_datasets
+
+class ExperimentTracker:
+    """
+    Class to track experiment results across multiple runs with different configurations.
+    """
+    def __init__(self, base_dir="experiments"):
+        self.base_dir = Path(base_dir)
+        self.results_file = self.base_dir / "experiment_results.csv"
+        
+        # Create the results file if it doesn't exist
+        if not self.results_file.exists():
+            self._create_results_file()
+        
+    def _create_results_file(self):
+        """Initialize the results file with column headers."""
+        # Make sure the directory exists
+        self.base_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create empty dataframe with appropriate columns
+        columns = [
+            'experiment_id',
+            'glycan_encoder_type',
+            'protein_encoder_type',
+            'binding_predictor_type',
+            'batch_size',
+            'learning_rate',
+            'log_predict',
+            'split_mode',
+            'use_kfold',
+            'k_folds',
+            'best_train_loss',
+            'best_val_loss',
+            'best_train_mse',
+            'best_val_mse',
+            'best_train_pearson',
+            'best_val_pearson',
+            'best_epoch',
+            'timestamp'
+        ]
+        
+        df = pd.DataFrame(columns=columns)
+        df.to_csv(self.results_file, index=False)
+        
+    def add_experiment_result(self, experiment_id, config, metrics_df):
+        """
+        Add results from a completed experiment to the results table.
+        
+        Args:
+            experiment_id: Unique identifier for the experiment
+            config: TrainingConfig object with experiment settings
+            metrics_df: DataFrame containing the metrics history
+        """
+        # Find the best validation metrics (usually the lowest validation loss)
+        best_idx = metrics_df['val_loss'].idxmin()
+        best_metrics = metrics_df.iloc[best_idx]
+        
+        # Create a new row for the results table
+        result = {
+            'experiment_id': experiment_id,
+            'glycan_encoder_type': config.glycan_encoder_type,
+            'protein_encoder_type': config.protein_encoder_type,
+            'binding_predictor_type': config.binding_predictor_type,
+            'batch_size': config.batch_size,
+            'learning_rate': config.learning_rate,
+            'log_predict': config.log_predict,
+            'split_mode': config.split_mode,
+            'use_kfold': config.use_kfold,
+            'k_folds': config.k_folds if config.use_kfold else None,
+            'best_train_loss': best_metrics['train_loss'],
+            'best_val_loss': best_metrics['val_loss'],
+            'best_train_mse': best_metrics['train_mse'],
+            'best_val_mse': best_metrics['val_mse'],
+            'best_train_pearson': best_metrics['train_pearson'],
+            'best_val_pearson': best_metrics['val_pearson'],
+            'best_epoch': best_metrics['epoch'],
+            'timestamp': best_metrics['timestamp']
+        }
+        
+        # Load existing results
+        try:
+            results_df = pd.read_csv(self.results_file)
+        except Exception:
+            # If there's an issue with the file, recreate it
+            self._create_results_file()
+            results_df = pd.read_csv(self.results_file)
+        
+        # Add the new result and save
+        results_df = pd.concat([results_df, pd.DataFrame([result])], ignore_index=True)
+        results_df.to_csv(self.results_file, index=False)
+        
+        return results_df
+    
+    def get_results_table(self):
+        """Get the current results table as a DataFrame."""
+        try:
+            return pd.read_csv(self.results_file)
+        except Exception:
+            self._create_results_file()
+            return pd.read_csv(self.results_file)
 
 class GlycoProteinDataset(Dataset):
     def __init__(self, fractions_df, glycan_encodings, protein_encodings, glycan_mapping, protein_mapping):
@@ -50,13 +150,30 @@ class GlycoProteinDataset(Dataset):
             'concentration': torch.tensor([row['Concentration']], dtype=torch.float32),
             'target': torch.tensor([row['f']], dtype=torch.float32)
         }
-
+        
+# https://stackoverflow.com/a/74801406
+class weighted_MSELoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+    def forward(self,inputs,targets,weights):
+        #print('targets before', targets)
+        #targets = torch.log(1+targets)
+        #print('targets after', targets)
+        return ((inputs - targets)**2 ) * weights
 
 class BindingTrainer:
     def __init__(self, config: TrainingConfig):
         self.config = config
         self.device = torch.device(config.device)
+        
+        torch.manual_seed(self.config.random_state)
+        
         self.experiment_dir = Path(config.output_dir)
+
+        self.experiment_id = str(uuid.uuid4())[:8]  # Using first 8 chars of UUID
+        base_dir = str(Path(config.output_dir).parent)  # Use parent of the experiment dir for results table
+        self.tracker = ExperimentTracker(base_dir)
+
         self.setup_models()
     
     def setup_models(self):
@@ -88,7 +205,7 @@ class BindingTrainer:
             list(self.binding_predictor.parameters()),
             lr=self.config.learning_rate
         )
-        self.criterion = self.weighted_mse_loss #nn.MSELoss() 
+        self.criterion = weighted_MSELoss() #self.weighted_mse_loss #nn.MSELoss() 
         
     def weighted_mse_loss(self, predictions, targets, weight=None):
         """
@@ -102,7 +219,7 @@ class BindingTrainer:
         if weight is None:
             return nn.MSELoss()(predictions, targets)
         else:
-            return (weight * (predictions - targets) ** 2).mean()
+            return (weight * ((predictions - targets) ** 2)).mean()
         
     def reset_models(self):
         """Reset all models to their initial state"""
@@ -117,30 +234,47 @@ class BindingTrainer:
         all_predictions = []
         all_targets = []
         
-  
-        
         pbar = tqdm(train_loader, desc='Training')
         for batch in pbar:
-            
-        
             glycan_encoding = batch['glycan_encoding'].to(self.device)
             protein_encoding = batch['protein_encoding'].to(self.device)
             concentration = batch['concentration'].to(self.device)
             
             targets = batch['target'].to(self.device)
             
+            if self.config.log_predict:
+                #print('targets before BEFORE', targets)
+                #old_targets = targets.clone().detach()
+                #print('targets before', old_targets)
+                #targets = torch.log1p(targets)
+                targets = torch.log(targets + 1e-6)
+                #print('targets after', targets)
+            
             predictions = self.binding_predictor(
                 glycan_encoding,
                 protein_encoding,
                 concentration
             )
+
+            #print('***predictions***')
+            #print(predictions)
             
-            loss = self.criterion(predictions, targets, weight=fold_weight)
+            loss = self.criterion(predictions, targets, fold_weight)
             
-            # backward pass
+            # average out loss across the batch
+            loss = loss.mean()
+            
+            # reset gradients to zero
             self.optimizer.zero_grad()
-            loss.backward()
+            # perform backpropigation to calculate the gradients we need to improve model
+            loss.backward(retain_graph=True)
+            # update the weights with our loss gradients
             self.optimizer.step()
+            
+            # revert predictions and targets to original values for original analysis if using log transform
+            if self.config.log_predict:
+                predictions = torch.exp(predictions) - 1e-6 #torch.expm1(predictions)
+                targets = torch.exp(targets) - 1e-6 #torch.expm1(targets)
             
             # track totals
             total_loss += loss.item()
@@ -175,13 +309,21 @@ class BindingTrainer:
                 concentration = batch['concentration'].to(self.device)
                 targets = batch['target'].to(self.device)
                 
+                if self.config.log_predict:
+                    targets = torch.log(targets + 1e-6) #torch.log1p(targets)
+                
                 predictions = self.binding_predictor(
                     glycan_encoding,
                     protein_encoding,
                     concentration
                 )
 
-                loss = self.criterion(predictions, targets, weight=fold_weight)
+                loss = self.criterion(predictions, targets, fold_weight).mean()
+                
+                # revert predictions and targets to original values for original analysis if using log transform
+                if self.config.log_predict:
+                    predictions = torch.exp(predictions) - 1e-6 #torch.expm1(predictions)
+                    targets = torch.exp(targets) - 1e-6 #torch.expm1(targets)
                 
                 # track totals
                 total_loss += loss.item()
@@ -198,7 +340,6 @@ class BindingTrainer:
         metrics['loss'] = total_loss / len(val_loader)
         
         return metrics
-    
     
     def save_checkpoint(self, fold: int = None, epoch: int = None):
         # https://pytorch.org/tutorials/beginner/saving_loading_models.html
@@ -218,6 +359,8 @@ class BindingTrainer:
             checkpoint_name = f"model_fold_{fold}_epoch_{epoch}.pt"
         elif fold is not None:
             checkpoint_name = f"model_fold_{fold}_final.pt"
+        elif epoch is not None:
+            checkpoint_name = f"model_epoch_{epoch}.pt"
         else:
             checkpoint_name = "model_final.pt"
             
@@ -306,6 +449,14 @@ class BindingTrainer:
             plt.close()
     
     def train(self, fractions_df: pd.DataFrame, glycans_df: pd.DataFrame, proteins_df: pd.DataFrame):
+        # # Log experiment configuration
+        # config_path = self.experiment_dir / 'config.txt'
+        # with open(config_path, 'w') as f:
+        #     f.write(f"Experiment ID: {self.experiment_id}\n")
+        #     for key, value in vars(self.config).items():
+        #         f.write(f"{key}: {value}\n")
+        
+        # common metrics tracking
         all_metrics = {
             'train_loss': [],
             'val_loss': [],
@@ -317,47 +468,47 @@ class BindingTrainer:
             'timestamp': []
         }
         
-        fold_indices, glycan_encodings, protein_encodings = prepare_kfold_datasets(
+        fold_indices, glycan_encodings, protein_encodings = prepare_train_val_datasets(
             fractions_df,
             glycans_df,
             proteins_df,
-            self.config.k_folds,
             self.glycan_encoder,
             self.protein_encoder,
-            self.config.random_state
+            self.config.random_state,
+            self.config.split_mode,
+            self.config.use_kfold,
+            self.config.k_folds,
+            self.config.val_split,
+            self.config.device
         )
         
-        # {glycanID_123: 5, glycanID_432: 12, ...}
+        # Create mappings
         glycan_mapping = {name: idx for idx, name in enumerate(glycans_df['Name'])}
         protein_mapping = {name: idx for idx, name in enumerate(proteins_df['ProteinGroup'])}
         
-        
-        # Set up metrics tracking
+        # Tracking metrics
         fold_metrics = []
-        all_metrics = {
-            'train_loss': [],
-            'val_loss': [],
-            'train_mse': [],
-            'val_mse': [],
-            'train_pearson': [],
-            'val_pearson': [],
-            'epoch': [],
-            'timestamp': []
-        }
-        
-        # Tracking metrics per fold for visualization
         fold_specific_metrics = []
         
-        print(f"Starting {self.config.k_folds}-fold cross-validation on our total {len(fractions_df)} samples")
+        if self.config.use_kfold:
+            print(f"Starting {self.config.k_folds}-fold cross-validation on our total {len(fractions_df)} samples")
+            
+            # Calculate fold weights
+            train_sizes = [len(train_samples) for train_samples, test_samples in fold_indices]
+            total_train_samples = sum(train_sizes)
+            fold_weights = [total_train_samples / (len(fold_indices) * train_size) for train_size in train_sizes]
+        else:
+            print(f"Starting regular training with {len(fold_indices[0][0])} training samples and {len(fold_indices[0][1])} validation samples")
+            fold_weights = [1.0]  # No special weighting for regular training
         
-        # Calculate fold weights (inverse of train size -> the larger the validation set is, the more it contributes to our score, as more valition samples means more accurate error)
-        train_sizes = [len(train_samples) for train_samples, test_samples in fold_indices]
-        total_train_samples = sum(train_sizes)
-        fold_weights = [total_train_samples / (len(fold_indices) * train_size) for train_size in train_sizes]
-        
-        # For each fold
+        # For each fold (or single split for regular training)
         for fold_idx, (train_idx, test_idx) in enumerate(fold_indices):
-            # Get data for this fold
+            
+            if len(test_idx) == 0:
+                print('Test set size empty so skipping (try different split or k-fold)')
+                continue
+            
+            # Get data for this fold/split
             train_data = fractions_df.loc[train_idx]
             val_data = fractions_df.loc[test_idx]
             fold_weight = fold_weights[fold_idx]
@@ -369,43 +520,45 @@ class BindingTrainer:
                 val_data, glycan_encodings, protein_encodings, glycan_mapping, protein_mapping
             )
             
+            if self.config.use_kfold:
+                print(f"\n{'='*20} Fold {fold_idx+1}/{self.config.k_folds} {'='*20}")
+            else:
+                print(f"\n{'='*20} Training Run {'='*20}")
             
-            print(f"\n{'='*20} Fold {fold_idx+1}/{self.config.k_folds} {'='*20}")
-            
-            # Reset models for this fold
+            # Reset models for this fold/run
             self.reset_models()
-            
-
             
             # Create data loaders
             train_loader = DataLoader(
-                train_pytorch_dataset, #FractionDataset(train_data),
+                train_pytorch_dataset,
                 batch_size=self.config.batch_size,
-                shuffle=False, # dont need to shuffle as already shuffled in stratified_kfold_split()
-                #collate_fn=custom_collate
+                shuffle=True,
             )
             val_loader = DataLoader(
-                val_pytorch_dataset,#FractionDataset(val_data),
+                val_pytorch_dataset,
                 batch_size=self.config.batch_size,
-                shuffle=False, # dont need to shuffle as already shuffled in stratified_kfold_split()
-                #collate_fn=custom_collate
+                shuffle=True,
             )
             
             print(f"Training with {len(train_data)} samples: ({(len(train_data) / (len(train_data) + len(val_data))) * 100:.2f}%), "
-                  f"validating with {len(val_data)} samples: ({(len(val_data) / (len(train_data) + len(val_data))) * 100:.2f}%), " 
-                  f"Fold weight: ~{fold_weight:.5f}")
+                  f"validating with {len(val_data)} samples: ({(len(val_data) / (len(train_data) + len(val_data))) * 100:.2f}%)")
+                  
+            if self.config.use_kfold:
+                print(f"Fold weight: ~{fold_weight:.5f}")
             
-            # Training loop for this fold
+            # Training loop for this fold/run
             fold_train_metrics = []
             fold_val_metrics = []
             
             for epoch in range(self.config.num_epochs):
                 print(f"\nEpoch {epoch + 1}/{self.config.num_epochs}")
                 
+                # if no k-fold then fold_weight is just 1
                 train_metrics = self._train_epoch(train_loader, fold_weight)
                 val_metrics = self._validate(val_loader, fold_weight)
+
                 
-                # Save metrics for this fold
+                # Save metrics for this fold/run
                 timestamp = datetime.now().isoformat()
                 fold_train_metrics.append(train_metrics)
                 fold_val_metrics.append(val_metrics)
@@ -427,19 +580,26 @@ class BindingTrainer:
                       f"Val Loss: {val_metrics['loss']:.4f}")
                 
                 if (epoch + 1) % self.config.checkpoint_frequency == 0:
-                    self.save_checkpoint(fold=fold_idx, epoch=epoch)
+                    if self.config.use_kfold:
+                        self.save_checkpoint(fold=fold_idx, epoch=epoch+1)
+                    else:
+                        self.save_checkpoint(epoch=epoch+1)
             
-            # Save final model for this fold
-            self.save_checkpoint(fold=fold_idx)
+            # Save final model for this fold/run
+            if self.config.use_kfold:
+                self.save_checkpoint(fold=fold_idx)
+            else:
+                self.save_checkpoint()
             
-            # Record metrics from this fold
+            # Record metrics from this fold/run
             fold_metrics.append({
                 'fold': fold_idx,
                 'train_metrics': fold_train_metrics,
                 'val_metrics': fold_val_metrics
             })
         
-        # Calculate average metrics across all folds
+        # For k-fold, calculate average metrics across all folds
+        # For regular training, this will just process the single "fold"
         for epoch in range(self.config.num_epochs):
             epoch_metrics = {
                 'train_loss': 0,
@@ -460,8 +620,9 @@ class BindingTrainer:
                 epoch_metrics['val_pearson'] += fold_data['val_metrics'][epoch]['pearson']
             
             # Calculate average
+            folds_count = len(fold_metrics)
             for key in epoch_metrics:
-                epoch_metrics[key] /= self.config.k_folds
+                epoch_metrics[key] /= folds_count
             
             # Store average metrics
             all_metrics['train_loss'].append(epoch_metrics['train_loss'])
@@ -480,6 +641,33 @@ class BindingTrainer:
         # Save the fold-specific metrics
         fold_metrics_df = pd.DataFrame(fold_specific_metrics)
         fold_metrics_df.to_csv(self.experiment_dir / 'fold_metrics.csv', index=False)
+        
+        # Add experiment results to the tracker
+        updated_results = self.tracker.add_experiment_result(
+            self.experiment_id, 
+            self.config, 
+            metrics_df
+        )
+        
+        # Print out the updated results table for easy reference
+        print("\n=== Updated Experiment Results ===")
+        summary_columns = [
+            'experiment_id', 
+            'glycan_encoder_type', 
+            'protein_encoder_type', 
+            'binding_predictor_type',
+            'best_train_loss', 
+            'best_val_loss',
+            'best_train_mse',
+            'best_val_mse',
+            'best_train_pearson',
+            'best_val_pearson',
+        ]
+        print(updated_results[summary_columns].to_string())
+        
+        # Save a copy of the results in this experiment's directory for reference
+        updated_results.to_csv(self.experiment_dir / 'experiment_results.csv', index=False)
+        updated_results[summary_columns].to_csv('experiments_summary.csv', index=False)
         
         # Plot the metrics
         self.plot_metrics(metrics_df, fold_metrics_df)
@@ -507,12 +695,13 @@ class BindingTrainer:
             for epoch in range(self.config.num_epochs):
                 print(f"\nEpoch {epoch + 1}/{self.config.num_epochs}")
                 
-                train_metrics = self._train_epoch(full_loader)
+                # Use default weight for final model training
+                train_metrics = self._train_epoch(full_loader, 1.0)
                 
                 print(f"Train Loss: {train_metrics['loss']:.4f}")
                 
                 if (epoch + 1) % self.config.checkpoint_frequency == 0:
-                    self.save_checkpoint(epoch=epoch)
+                    self.save_checkpoint(epoch=epoch+1)
             
             # Save the final model
             self.save_checkpoint()
