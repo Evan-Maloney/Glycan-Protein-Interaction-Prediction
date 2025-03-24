@@ -194,6 +194,10 @@ class BindingTrainer:
         if 'dnn_hidden_dims' in self.config.model_specific_params:
             predictor_params['hidden_dims'] = self.config.model_specific_params['dnn_hidden_dims']
         
+        # Add XGBoost specific parameters if using XGBoost
+        if self.config.binding_predictor_type == 'xgb' and 'xgb_params' in self.config.model_specific_params:
+            predictor_params['params'] = self.config.model_specific_params['xgb_params']
+
         self.binding_predictor = create_binding_predictor(
             self.config.binding_predictor_type,
             **predictor_params
@@ -259,17 +263,27 @@ class BindingTrainer:
             #print('***predictions***')
             #print(predictions)
             
-            loss = self.criterion(predictions, targets, fold_weight)
-            
-            # average out loss across the batch
-            loss = loss.mean()
-            
-            # reset gradients to zero
-            self.optimizer.zero_grad()
-            # perform backpropigation to calculate the gradients we need to improve model
-            loss.backward(retain_graph=True)
-            # update the weights with our loss gradients
-            self.optimizer.step()
+            # Special handling for XGBoost
+            if hasattr(self.binding_predictor, 'train_model') and self.config.binding_predictor_type == 'xgb':
+                # XGBoost specific training
+                self.binding_predictor.train_model(targets)
+                
+                # Calculate loss for tracking purposes only
+                loss = self.criterion(predictions, targets, fold_weight)
+                loss = loss.mean()
+            else:
+                # Regular neural network training
+                loss = self.criterion(predictions, targets, fold_weight)
+                
+                # average out loss across the batch
+                loss = loss.mean()
+                
+                # reset gradients to zero
+                self.optimizer.zero_grad()
+                # perform backpropigation to calculate the gradients we need to improve model
+                loss.backward(retain_graph=True)
+                # update the weights with our loss gradients
+                self.optimizer.step()
             
             # revert predictions and targets to original values for original analysis if using log transform
             if self.config.log_predict:
@@ -338,6 +352,23 @@ class BindingTrainer:
         val_targets = torch.cat(all_targets)
         metrics = calculate_metrics(val_predictions, val_targets)
         metrics['loss'] = total_loss / len(val_loader)
+
+        # For XGBoost models, add feature importance to metrics
+        if hasattr(self.binding_predictor, 'get_feature_importances'):
+            try:
+                feature_importances = self.binding_predictor.get_feature_importances()
+                # Add top 5 most important features to metrics for logging
+                if feature_importances:
+                    top_features = sorted(
+                        feature_importances.items(),
+                        key=lambda x: x[1], 
+                        reverse=True
+                    )[:5]
+                    
+                    for i, (feature, importance) in enumerate(top_features):
+                        metrics[f'importance_{i+1}_{feature}'] = importance
+            except Exception as e:
+                print(f"Warning: Could not get feature importances: {e}")
         
         return metrics
     
