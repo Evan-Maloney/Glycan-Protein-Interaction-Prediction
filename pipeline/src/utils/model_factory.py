@@ -4,6 +4,7 @@ from ..models.glycan_encoders.dummy import DummyGlycanEncoder
 from ..models.glycan_encoders.chemberta import ChemBERTaEncoder
 from ..models.glycan_encoders.rdkit import RDKITGlycanEncoder
 from ..models.glycan_encoders.gnn import GNNGlycanEncoder
+from ..models.glycan_encoders.aconn_gnn import ACONNEncoder
 
 from ..models.protein_encoders.dummy import DummyProteinEncoder
 from ..models.binding_predictors.dummy import DummyBindingPredictor
@@ -24,7 +25,8 @@ def create_glycan_encoder(encoder_type: str, **kwargs) -> Any:
         'dummy': DummyGlycanEncoder,
         'chemberta': ChemBERTaEncoder,
         'rdkit': RDKITGlycanEncoder,
-        'gnn': GNNGlycanEncoder
+        'gnn': GNNGlycanEncoder,
+        'aconn_gnn': ACONNEncoder
     }
     
     encoder = encoders[encoder_type]
