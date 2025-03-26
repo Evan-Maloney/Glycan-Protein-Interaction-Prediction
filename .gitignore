@@ -5,4 +5,4 @@ pipeline/experiments/
 
 pipeline/experiments_summary.csv
 
-glycanML_glycan_interactions.tsv
+pipeline/data/GlycanML/glycanML_glycan_interactions.tsv
