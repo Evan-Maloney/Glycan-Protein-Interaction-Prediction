@@ -159,7 +159,7 @@ class weighted_MSELoss(nn.Module):
         #print('targets before', targets)
         #targets = torch.log(1+targets)
         #print('targets after', targets)
-        return ((inputs - targets)**2 ) * weights
+        return torch.mean(((inputs - targets)**2 ) * weights)
 
 class BindingTrainer:
     def __init__(self, config: TrainingConfig):
@@ -261,8 +261,6 @@ class BindingTrainer:
             
             loss = self.criterion(predictions, targets, fold_weight)
             
-            # average out loss across the batch
-            loss = loss.mean()
             
             # reset gradients to zero
             self.optimizer.zero_grad()
@@ -276,6 +274,7 @@ class BindingTrainer:
                 predictions = torch.exp(predictions) - 1e-6 #torch.expm1(predictions)
                 targets = torch.exp(targets) - 1e-6 #torch.expm1(targets)
             
+            
             # track totals
             total_loss += loss.item()
             all_predictions.append(predictions.detach())
@@ -288,7 +287,7 @@ class BindingTrainer:
         epoch_predictions = torch.cat(all_predictions)
         epoch_targets = torch.cat(all_targets)
         metrics = calculate_metrics(epoch_predictions, epoch_targets)
-        metrics['loss'] = total_loss / len(train_loader)
+        metrics['loss'] = total_loss #/ len(train_loader)
         
         return metrics
     
@@ -318,7 +317,8 @@ class BindingTrainer:
                     concentration
                 )
 
-                loss = self.criterion(predictions, targets, fold_weight).mean()
+                loss = self.criterion(predictions, targets, fold_weight)
+                
                 
                 # revert predictions and targets to original values for original analysis if using log transform
                 if self.config.log_predict:
@@ -337,7 +337,7 @@ class BindingTrainer:
         val_predictions = torch.cat(all_predictions)
         val_targets = torch.cat(all_targets)
         metrics = calculate_metrics(val_predictions, val_targets)
-        metrics['loss'] = total_loss / len(val_loader)
+        metrics['loss'] = total_loss #/ len(val_loader)
         
         return metrics
     

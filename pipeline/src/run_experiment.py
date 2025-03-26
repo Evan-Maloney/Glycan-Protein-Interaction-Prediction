@@ -6,6 +6,7 @@ from src.utils.auth import authenticate_huggingface
 from src.training.trainer import BindingTrainer
 from torch import nn
 
+# had to add this class here so that sweet talk glycan encoder could run
 #bidirectional, two-layered LSTM without padding
 class RNN(nn.Module):
   def __init__(self, input_size, hidden_size, num_classes, n_layers = 2):
@@ -16,7 +17,8 @@ class RNN(nn.Module):
     self.n_layers = n_layers
     
     # Move BatchNorm1d here, use hidden_size (features), not batch_size
-    self.bn1 = nn.BatchNorm1d(hidden_size)
+    #self.bn1 = nn.BatchNorm1d(hidden_size)
+    self.bn1 = nn.BatchNorm1d(29)
     
     self.encoder = nn.Embedding(input_size, hidden_size, padding_idx = self.num_classes-1)
     self.decoder = nn.Linear(hidden_size, num_classes)
@@ -24,17 +26,18 @@ class RNN(nn.Module):
     self.logits_fc = nn.Linear(2*hidden_size, num_classes)   
     
   def forward(self, input_seq, input_seq_len, hidden=None):
-    print(f"input_seq shape: {input_seq.shape}")  # Debugging shape
+    #print(f"input_seq shape: {input_seq.shape}")  # Debugging shape
+    
     
     embedded = self.encoder(input_seq)  # (seq_len, batch_size, hidden_size)
-    print(f"embedded shape before BN: {embedded.shape}")
+    #print(f"embedded shape before BN: {embedded.shape}")
 
     # Permute to (batch_size, hidden_size, seq_len) for BatchNorm1d
     embedded = embedded.permute(1, 2, 0)
-    print(f"embedded shape after permute: {embedded.shape}")
+    #print(f"embedded shape after permute: {embedded.shape}")
 
     embedded = self.bn1(embedded)  # This is where the error occurs
-    print(f"embedded shape after BN: {embedded.shape}")
+    #print(f"embedded shape after BN: {embedded.shape}")
 
     # Restore to (seq_len, batch_size, hidden_size)
     embedded = embedded.permute(2, 0, 1)

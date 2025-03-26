@@ -4,8 +4,7 @@ from ..models.glycan_encoders.dummy import DummyGlycanEncoder
 from ..models.glycan_encoders.chemberta import ChemBERTaEncoder
 from ..models.glycan_encoders.rdkit import RDKITGlycanEncoder
 from ..models.glycan_encoders.gnn import GNNGlycanEncoder
-# change to orig instead of _2 after done testing (maxym)
-from ..models.glycan_encoders.sweet_talk_2 import SweetTalkGlycanEncoder
+from ..models.glycan_encoders.sweet_talk import SweetTalkGlycanEncoder
 
 from ..models.protein_encoders.dummy import DummyProteinEncoder
 from ..models.binding_predictors.dummy import DummyBindingPredictor
