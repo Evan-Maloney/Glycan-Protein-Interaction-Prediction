@@ -4,3 +4,5 @@ pipeline/Miniconda3-latest-Linux-x86_64.sh
 pipeline/experiments/
 
 pipeline/experiments_summary.csv
+
+glycanML_glycan_interactions.tsv
