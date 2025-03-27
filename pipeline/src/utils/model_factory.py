@@ -2,7 +2,7 @@ from typing import Dict, Any
 
 from ..models.glycan_encoders.dummy import DummyGlycanEncoder
 from ..models.glycan_encoders.chemberta import ChemBERTaEncoder
-from ..models.glycan_encoders.rdkit import RDKITGlycanEncoder
+from ..models.glycan_encoders.rdkit_encoder import RDKITGlycanEncoder
 from ..models.glycan_encoders.gnn import GNNGlycanEncoder
 
 from ..models.glycan_encoders.sweetnet import SweetNetEncoder
