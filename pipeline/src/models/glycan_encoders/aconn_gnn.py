@@ -68,8 +68,7 @@ class ACONNEncoder(GlycanEncoder):
         x = self.dropout(x)
 
         # Graph pooling to get fixed-size embedding
-        graph_embedding = global_mean_pool(x, batch=None)  # shape: [hidden_dim]
-        x = self.linear(graph_embedding)
+        x = global_mean_pool(x, batch=None)  # shape: [hidden_dim]
         return x.unsqueeze(0)
     
     def encode_smiles(self, smiles: str, device: torch.device):

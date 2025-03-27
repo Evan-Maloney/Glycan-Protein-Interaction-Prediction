@@ -4,8 +4,8 @@ predict_data_path: "data/Train_Fractions.csv"
 glycans_data_path: "data/Glycan-Structures-CFG611.txt"
 proteins_data_path: "data/Protein-Sequence-Table.txt"
 glycan_encoder_type: "aconn_gnn"
-protein_encoder_type: "biopy"
-binding_predictor_type: "dnn"
+protein_encoder_type: "lstm"
+binding_predictor_type: "attention"
 num_epochs: 10
 batch_size: 32
 learning_rate: 0.005
