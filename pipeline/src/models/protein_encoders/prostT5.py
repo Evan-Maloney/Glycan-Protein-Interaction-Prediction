@@ -52,7 +52,7 @@ class ProstT5Encoder(ProteinEncoder):
             return_tensors='pt'
         )
         
-        input_ids = ids["input_ids"].to(device),
+        input_ids = ids["input_ids"].to(device)
         attention_mask = ids["attention_mask"].to(device)
         with torch.no_grad():
             embeddings = self.model(
