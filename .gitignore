@@ -1,6 +1,9 @@
 .DS_Store
-__pycache__/
+*__pycache__/
 pipeline/Miniconda3-latest-Linux-x86_64.sh
 pipeline/experiments/
 
 pipeline/experiments_summary.csv
+
+*.pt
+*.yaml
