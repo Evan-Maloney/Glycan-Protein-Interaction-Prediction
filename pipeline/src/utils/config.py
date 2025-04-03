@@ -14,6 +14,7 @@ class TrainingConfig:
     glycan_encoder_type: str
     protein_encoder_type: str
     binding_predictor_type: str
+    glycan_type: str
     num_epochs: int
     batch_size: int
     learning_rate: float

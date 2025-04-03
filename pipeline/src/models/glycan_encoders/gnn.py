@@ -181,6 +181,11 @@ class GNNGlycanEncoder(GlycanEncoder):
         
         return x
     
+    
+    def encode_iupac(self, iupac_str: str, device: torch.device) -> torch.Tensor:
+        """aaaaaa"""
+        pass
+    
     def encode_smiles(self, smiles: str, device: torch.device) -> torch.Tensor:
         """Convert a SMILES string to a graph embedding"""
         mol = Chem.MolFromSmiles(smiles)
@@ -212,6 +217,12 @@ class GNNGlycanEncoder(GlycanEncoder):
         for smiles in batch_data:
             embedding = self.encode_smiles(smiles, device)
             batch_embeddings.append(embedding)
+<<<<<<< HEAD
+        #for iupac in batch_data:
+            #embedding = self.encode_iupac(iupac, device)
+            #batch_embeddings.append(embedding)
+=======
+>>>>>>> main
         
         # Stack all embeddings
         batch = torch.cat(batch_embeddings, dim=0)
