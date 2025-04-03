@@ -181,14 +181,11 @@ class GNNGlycanEncoder(GlycanEncoder):
         
         return x
     
-<<<<<<< HEAD
     
     def encode_iupac(self, iupac_str: str, device: torch.device) -> torch.Tensor:
         """aaaaaa"""
         pass
     
-=======
->>>>>>> main
     def encode_smiles(self, smiles: str, device: torch.device) -> torch.Tensor:
         """Convert a SMILES string to a graph embedding"""
         mol = Chem.MolFromSmiles(smiles)
