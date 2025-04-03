@@ -10,3 +10,5 @@ pipeline/data/GlycanML/glycanML_glycan_interactions.tsv
 multitask_training/glyML_train_dataset.pkl
 
 multitask_training/glyML_val_dataset.pkl
+
+pipeline/data/BindingDB/BindingDB_All.tsv
