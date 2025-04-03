@@ -4,7 +4,6 @@ import argparse
 from src.utils.config import TrainingConfig, setup_experiment_dir
 from src.utils.auth import authenticate_huggingface
 from src.training.trainer import BindingTrainer
-<<<<<<< HEAD
 from torch import nn
 
 # had to add this class here so that sweet talk glycan encoder could run
@@ -50,8 +49,6 @@ class RNN(nn.Module):
     logits_flatten = logits.view(-1, self.num_classes)
 
     return logits_flatten, hidden
-=======
->>>>>>> main
 
 def main():
     parser = argparse.ArgumentParser()
