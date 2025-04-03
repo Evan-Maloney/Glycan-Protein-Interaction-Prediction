@@ -3,7 +3,7 @@ output_dir: "experiments"
 predict_data_path: "data/Train_Fractions.csv"
 glycans_data_path: "data/Glycan-Structures-CFG611.txt"
 proteins_data_path: "data/Protein-Sequence-Table.txt"
-glycan_encoder_type: "aconn_gnn"
+glycan_encoder_type: "aconn_gnnV2"
 protein_encoder_type: "lstm"
 binding_predictor_type: "attention"
 num_epochs: 10

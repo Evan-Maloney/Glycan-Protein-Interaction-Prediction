@@ -10,7 +10,7 @@ from torch_geometric.nn import GCNConv, global_mean_pool
 from ...base.encoders import GlycanEncoder
 
 class ACONNEncoder(GlycanEncoder):
-    def __init__(self, max_nodes=512, embedding_dim=32, hidden_dim=64, dropout_prob=0.2):
+    def __init__(self, max_nodes=512, embedding_dim=32, hidden_dim=32, dropout_prob=0.2):
         super().__init__()
 
         self.max_nodes = max_nodes
@@ -26,9 +26,6 @@ class ACONNEncoder(GlycanEncoder):
 
         # Regularization
         self.dropout = nn.Dropout(p=dropout_prob)
-
-        # Final output dimension
-        self.linear = nn.Linear(hidden_dim, embedding_dim)
 
     def smiles_to_graph(self, smiles):
         """Converts a SMILES string to a PyTorch Geometric graph."""
@@ -110,7 +107,7 @@ class ACONNEncoder(GlycanEncoder):
         # Global graph pooling (mean over atoms in each molecule)
         graph_embeddings = global_mean_pool(x, batch.batch)  # [batch_size, hidden_dim]
 
-        return self.linear(graph_embeddings)
+        return graph_embeddings
     
     @property
     def embedding_dim(self) -> int:
