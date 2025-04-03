@@ -25,6 +25,19 @@ class GlycanEncoder(nn.Module, ABC):
         pass
     
     @abstractmethod
+    def encode_iupac(self, iupacs: str, device: torch.device) -> torch.Tensor:
+        """
+        Encode a IUPAC string to a fixed-length tensor
+        
+        Args:
+            iupacs (str): IUPAC string representing a glycan molecule
+            
+        Returns:
+            torch.Tensor: Encoded representation of the glycan
+        """
+        pass
+    
+    @abstractmethod
     def encode_batch(self, batch_data: List[str], device: torch.device) -> torch.Tensor:
         """
         Encode a batch of SMILES strings

@@ -1,0 +1,25 @@
+# required
+output_dir: "experiments"
+predict_data_path: "data/GlycanML/train_fractions.tsv"
+glycans_data_path: "data/GlycanML/glycans.tsv"
+proteins_data_path: "data/GlycanML/proteins.tsv"
+glycan_encoder_type: "sweettalk"
+protein_encoder_type: "biopy"
+binding_predictor_type: "dnn"
+glycan_type: "SMILES"
+num_epochs: 4
+batch_size: 32
+learning_rate: 0.001
+checkpoint_frequency: 4 # every nth epoch save the model weights (in this example every 2nd epoch so saves at epoch 2, 4, 6, ...)
+train_final_model: False # if want to train and save the model on the best found params from cross val usinmg the entire training set.
+log_predict: False # tranform our target to log(1+target) (log1p()) so that we dont train the model to predict all zeros (reverted on predictions output with expm1())
+random_state: 42
+# if not using kfold make sure to specify your val_split (the % of each glycan and protein class to split_mode combine into the validation set)
+use_kfold: False # recomended to not use kfold if using split_mode AND as the splitting % vary greatly
+split_mode: 'AND'
+# optional
+val_split: 0.30
+k_folds: 3
+device: "cpu"
+model_specific_params: {}
+hf_auth: False

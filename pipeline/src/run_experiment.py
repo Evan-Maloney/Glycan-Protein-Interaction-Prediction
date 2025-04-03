@@ -4,6 +4,54 @@ import argparse
 from src.utils.config import TrainingConfig, setup_experiment_dir
 from src.utils.auth import authenticate_huggingface
 from src.training.trainer import BindingTrainer
+<<<<<<< HEAD
+from torch import nn
+
+# had to add this class here so that sweet talk glycan encoder could run
+#bidirectional, two-layered LSTM without padding
+class RNN(nn.Module):
+  def __init__(self, input_size, hidden_size, num_classes, n_layers = 2):
+    super(RNN,self).__init__()
+    self.input_size = input_size
+    self.hidden_size = hidden_size
+    self.num_classes = num_classes
+    self.n_layers = n_layers
+    
+    # Move BatchNorm1d here, use hidden_size (features), not batch_size
+    #self.bn1 = nn.BatchNorm1d(hidden_size)
+    self.bn1 = nn.BatchNorm1d(29)
+    
+    self.encoder = nn.Embedding(input_size, hidden_size, padding_idx = self.num_classes-1)
+    self.decoder = nn.Linear(hidden_size, num_classes)
+    self.gru = nn.LSTM(hidden_size, hidden_size, n_layers, bidirectional = True)
+    self.logits_fc = nn.Linear(2*hidden_size, num_classes)   
+    
+  def forward(self, input_seq, input_seq_len, hidden=None):
+    #print(f"input_seq shape: {input_seq.shape}")  # Debugging shape
+    
+    
+    embedded = self.encoder(input_seq)  # (seq_len, batch_size, hidden_size)
+    #print(f"embedded shape before BN: {embedded.shape}")
+
+    # Permute to (batch_size, hidden_size, seq_len) for BatchNorm1d
+    embedded = embedded.permute(1, 2, 0)
+    #print(f"embedded shape after permute: {embedded.shape}")
+
+    embedded = self.bn1(embedded)  # This is where the error occurs
+    #print(f"embedded shape after BN: {embedded.shape}")
+
+    # Restore to (seq_len, batch_size, hidden_size)
+    embedded = embedded.permute(2, 0, 1)
+
+    outputs, (h_n, c_n) = self.gru(embedded, hidden)
+    
+    logits = self.logits_fc(outputs)
+    logits = logits.transpose(0, 1).contiguous()
+    logits_flatten = logits.view(-1, self.num_classes)
+
+    return logits_flatten, hidden
+=======
+>>>>>>> main
 
 def main():
     parser = argparse.ArgumentParser()
