@@ -159,11 +159,7 @@ class weighted_MSELoss(nn.Module):
         #print('targets before', targets)
         #targets = torch.log(1+targets)
         #print('targets after', targets)
-<<<<<<< HEAD
         return torch.mean(((inputs - targets)**2 ) * weights)
-=======
-        return ((inputs - targets)**2 ) * weights
->>>>>>> main
 
 class BindingTrainer:
     def __init__(self, config: TrainingConfig):
@@ -265,11 +261,6 @@ class BindingTrainer:
             
             loss = self.criterion(predictions, targets, fold_weight)
             
-<<<<<<< HEAD
-=======
-            # average out loss across the batch
-            loss = loss.mean()
->>>>>>> main
             
             # reset gradients to zero
             self.optimizer.zero_grad()
@@ -283,10 +274,7 @@ class BindingTrainer:
                 predictions = torch.exp(predictions) - 1e-6 #torch.expm1(predictions)
                 targets = torch.exp(targets) - 1e-6 #torch.expm1(targets)
             
-<<<<<<< HEAD
             
-=======
->>>>>>> main
             # track totals
             total_loss += loss.item()
             all_predictions.append(predictions.detach())
@@ -299,11 +287,7 @@ class BindingTrainer:
         epoch_predictions = torch.cat(all_predictions)
         epoch_targets = torch.cat(all_targets)
         metrics = calculate_metrics(epoch_predictions, epoch_targets)
-<<<<<<< HEAD
         metrics['loss'] = total_loss #/ len(train_loader)
-=======
-        metrics['loss'] = total_loss / len(train_loader)
->>>>>>> main
         
         return metrics
     
@@ -333,12 +317,8 @@ class BindingTrainer:
                     concentration
                 )
 
-<<<<<<< HEAD
                 loss = self.criterion(predictions, targets, fold_weight)
                 
-=======
-                loss = self.criterion(predictions, targets, fold_weight).mean()
->>>>>>> main
                 
                 # revert predictions and targets to original values for original analysis if using log transform
                 if self.config.log_predict:
@@ -357,11 +337,7 @@ class BindingTrainer:
         val_predictions = torch.cat(all_predictions)
         val_targets = torch.cat(all_targets)
         metrics = calculate_metrics(val_predictions, val_targets)
-<<<<<<< HEAD
         metrics['loss'] = total_loss #/ len(val_loader)
-=======
-        metrics['loss'] = total_loss / len(val_loader)
->>>>>>> main
         
         return metrics
     
@@ -498,10 +474,7 @@ class BindingTrainer:
             proteins_df,
             self.glycan_encoder,
             self.protein_encoder,
-<<<<<<< HEAD
             self.config.glycan_type,
-=======
->>>>>>> main
             self.config.random_state,
             self.config.split_mode,
             self.config.use_kfold,
