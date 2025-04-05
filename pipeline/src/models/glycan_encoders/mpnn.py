@@ -30,16 +30,16 @@ class MPNNGlycanEncoder(GlycanEncoder):
             'mass',
             'row',
             'column',
-            'chirality',
+            #'chirality',
         ]
         
         # Edge features (4 + 4 + 1 + 1 + 1 = 11 dimensions)
         self.edge_features = [
             'bond_type',
             'stero_configuration',
-            'is_in_ring',
-            'is_conjugated',
-            'is_aromatic',
+            #'is_in_ring',
+            #'is_conjugated',
+            #'is_aromatic',
         ]
         
         self._embedding_dim = embedding_dim
@@ -49,13 +49,14 @@ class MPNNGlycanEncoder(GlycanEncoder):
 
         # Assume base node features have 125 dimensions.
         # (For example: one-hot atomic number (118) + mass (1) + row (1) + column (1) + chirality one-hot (4))
-        self.base_node_feature_dim = 125
+        self.base_node_feature_dim = 118 + 1 + 1 + 1 # + 4
+        
         # After concatenating positional embeddings, node feature dim becomes:
         self.node_feature_dim = self.base_node_feature_dim + self.pos_emb_dim + 2
 
         # Edge features dimension (example): 11.
         # (For example: bond type one-hot (4) + stereo configuration one-hot (4) + is_in_ring (1) + is_conjugated (1) + is_aromatic (1))
-        self.edge_feature_dim = 11
+        self.edge_feature_dim = 4 + 4 # + 1 + 1 + 1
 
          # Initial projection to hidden state.
         self.initial_linear = nn.Linear(self.node_feature_dim, self.hidden_state_size)
@@ -77,7 +78,7 @@ class MPNNGlycanEncoder(GlycanEncoder):
         # Final readout projection.
         self.f_readout = nn.Linear(self.hidden_state_size, self._embedding_dim)
         
-    def _get_random_walk_stats(self, adj: torch.Tensor, k_steps: int = 6) -> torch.Tensor:
+    def _get_random_walk_stats(self, adj: torch.Tensor, k_steps: int = 8) -> torch.Tensor:
         """
         Compute a k-step random walk bias matrix R = T^k (with T = D^-1 * A),
         and then derive per-node statistics (mean and std) for each node.
@@ -170,7 +171,7 @@ class MPNNGlycanEncoder(GlycanEncoder):
         features.append(element_col[atom.GetSymbol()])
 
         # chirality one hot encoding
-        features += self._one_hot_chirality(atom)
+        #features += self._one_hot_chirality(atom)
 
         return features
     
@@ -185,13 +186,13 @@ class MPNNGlycanEncoder(GlycanEncoder):
         features += self._one_hot_stereo_configuration(bond)
 
         # is in ring
-        features.append(bond.IsInRing())
+        #features.append(bond.IsInRing())
 
         # is conjugated
-        features.append(bond.GetIsConjugated())
+        #features.append(bond.GetIsConjugated())
 
         # is aromatic
-        features.append(bond.GetIsAromatic())
+        #features.append(bond.GetIsAromatic())
 
         return features
     

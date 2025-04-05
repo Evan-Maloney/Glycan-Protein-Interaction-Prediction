@@ -4,7 +4,9 @@ from ..models.glycan_encoders.dummy import DummyGlycanEncoder
 from ..models.glycan_encoders.chemberta import ChemBERTaEncoder
 from ..models.glycan_encoders.rdkit import RDKITGlycanEncoder
 from ..models.glycan_encoders.gnn import GNNGlycanEncoder
-from ..models.glycan_encoders.mpnn import MPNNGlycanEncoder
+from ..models.glycan_encoders.aconn_gnn import ACONNEncoder
+from ..models.glycan_encoders.aconn_gnnV2 import ACONNEncoderV2
+from ..models.glycan_encoders.sweet_talk import SweetTalkGlycanEncoder
 
 from ..models.protein_encoders.dummy import DummyProteinEncoder
 from ..models.binding_predictors.dummy import DummyBindingPredictor
@@ -12,10 +14,14 @@ from ..models.protein_encoders.biopy import BioPyProteinEncoder
 
 from ..models.binding_predictors.dnn import DNNBindingPredictor
 from ..models.protein_encoders.esmc import ESMCEncoder
+from ..models.binding_predictors.attention import AttentionFusionBindingPredictor
 
 from ..models.protein_encoders.pt_gnn import AdvancedGNNProteinEncoder
+from ..models.protein_encoders.lstm import LSTMProteinEncoder
 
 from ..models.binding_predictors.mean_predictor import MeanPredictor
+from ..models.binding_predictors.zero_predictor import ZeroPredictor
+
 
 
 def create_glycan_encoder(encoder_type: str, **kwargs) -> Any:
@@ -25,7 +31,9 @@ def create_glycan_encoder(encoder_type: str, **kwargs) -> Any:
         'chemberta': ChemBERTaEncoder,
         'rdkit': RDKITGlycanEncoder,
         'gnn': GNNGlycanEncoder,
-        'mpnn': MPNNGlycanEncoder
+        'aconn_gnn': ACONNEncoder,
+        'aconn_gnnV2': ACONNEncoderV2,
+        'sweettalk': SweetTalkGlycanEncoder
     }
     
     encoder = encoders[encoder_type]
@@ -37,7 +45,8 @@ def create_protein_encoder(encoder_type: str, **kwargs) -> Any:
         'dummy': DummyProteinEncoder,
         'esmc': ESMCEncoder,
         'biopy': BioPyProteinEncoder,
-        'pt_gnn': AdvancedGNNProteinEncoder
+        'pt_gnn': AdvancedGNNProteinEncoder,
+        'lstm': LSTMProteinEncoder
     }
 
     encoder = encoders[encoder_type]
@@ -48,7 +57,9 @@ def create_binding_predictor(predictor_type: str, **kwargs) -> Any:
     predictors = {
         'dummy': DummyBindingPredictor,
         'dnn': DNNBindingPredictor,
-        'mean': MeanPredictor
+        'mean': MeanPredictor,
+        'attention': AttentionFusionBindingPredictor,
+        'zero': ZeroPredictor
     }
     
     predictor = predictors[predictor_type]

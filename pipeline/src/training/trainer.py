@@ -1,6 +1,7 @@
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader, Dataset
+import torch.nn.functional as F
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -76,6 +77,7 @@ class ExperimentTracker:
             'glycan_encoder_type': config.glycan_encoder_type,
             'protein_encoder_type': config.protein_encoder_type,
             'binding_predictor_type': config.binding_predictor_type,
+            'loss_type': config.loss_type,
             'batch_size': config.batch_size,
             'learning_rate': config.learning_rate,
             'log_predict': config.log_predict,
@@ -147,12 +149,71 @@ class GlycoProteinDataset(Dataset):
             'target': torch.tensor([row['f']], dtype=torch.float32)
         }
         
-# https://stackoverflow.com/a/74801406
-class weighted_MSELoss(nn.Module):
-    def __init__(self):
+    
+class LossesClass(nn.Module):
+    def __init__(self, loss_type='mse', delta=1.0, beta=1.0):
+        """
+        Combined loss function that supports multiple loss types
+        
+        Args:
+            loss_type: One of 'mse', 'rmse', 'rmsle', 'mae', 'log_mae', 'huber', 'smooth_l1' 
+            delta: Parameter for Huber loss
+            beta: Parameter for Smooth L1 loss
+        """
         super().__init__()
-    def forward(self,inputs,targets,weights):
-        return ((inputs - targets)**2 ) * weights
+        
+    def forward(self, inputs, targets, weights):
+        # Always ensure weights exist, default to ones if not provided
+        #if weights is None:
+            #weights = torch.ones_like(targets)
+            
+        # Check if all weights are approximately 1.0
+        # will only be done on batches so dont have to worry about floating point sum up error on 1.0 's
+        #print(weights)
+        all_ones = weights == 1.0 #sum(weights) == len(weights) #torch.all(torch.abs(weights - 1.0) < 1e-6)
+        #print('all ones:', all_ones)
+        # Handle loss types that can use weights directly
+        if self.loss_type == 'mse':
+            loss = (inputs - targets)**2
+            return torch.mean(loss * weights)
+        elif self.loss_type == 'rmse':
+            loss = (inputs - targets)**2
+            weighted_mean = torch.mean(loss * weights)
+            return torch.sqrt(weighted_mean)
+        elif self.loss_type == 'rmsle':
+            log_inputs = torch.log(inputs + 1)
+            log_targets = torch.log(targets + 1)
+            loss = (log_inputs - log_targets)**2
+            weighted_mean = torch.mean(loss * weights)
+            return torch.sqrt(weighted_mean)
+        elif self.loss_type == 'mae' or self.loss_type == 'l1':
+            loss = torch.abs(inputs - targets)
+            return torch.mean(loss * weights)
+        elif self.loss_type == 'log_mae' or self.loss_type == 'log_l1':
+            loss = torch.abs(torch.log(inputs + 1) - torch.log(targets + 1))
+            return torch.mean(loss * weights)
+        
+        # For loss types that don't directly use weights, use PyTorch's implementation
+        # and effectively ignore weights when they're all 1.0
+        elif self.loss_type == 'huber':
+            # If weights are all approximately 1.0, use standard implementation
+            if all_ones:
+                return F.huber_loss(inputs, targets, reduction='mean', delta=self.delta)
+            else:
+                # Only apply manual weighting if weights are not all 1.0
+                loss = F.huber_loss(inputs, targets, reduction='none', delta=self.delta)
+                return torch.mean(loss * weights)
+                
+        elif self.loss_type == 'smooth_l1':
+            # If weights are all approximately 1.0, use standard implementation
+            if all_ones:
+                return F.smooth_l1_loss(inputs, targets, reduction='mean', beta=self.beta)
+            else:
+                # Only apply manual weighting if weights are not all 1.0
+                loss = F.smooth_l1_loss(inputs, targets, reduction='none', beta=self.beta)
+                return torch.mean(loss * weights)
+        else:
+            raise ValueError(f"Unsupported loss type: {self.loss_type}")
 
 class BindingTrainer:
     def __init__(self, config: TrainingConfig):
@@ -198,21 +259,8 @@ class BindingTrainer:
             list(self.binding_predictor.parameters()),
             lr=self.config.learning_rate
         )
-        self.criterion = weighted_MSELoss() #self.weighted_mse_loss #nn.MSELoss() 
+        self.criterion = LossesClass(loss_type=self.config.loss_type, delta=self.config.delta, beta=self.config.beta) #weighted_MSELoss() #self.weighted_mse_loss #nn.MSELoss() 
         
-    def weighted_mse_loss(self, predictions, targets, weight=None):
-        """
-        Weighted MSE loss
-        
-        Args:
-            predictions: Predicted values
-            targets: Target values
-            weight: Optional weight factor
-        """
-        if weight is None:
-            return nn.MSELoss()(predictions, targets)
-        else:
-            return (weight * ((predictions - targets) ** 2)).mean()
         
     def reset_models(self):
         """Reset all models to their initial state"""
@@ -244,10 +292,8 @@ class BindingTrainer:
                 concentration
             )
             
-            loss = self.criterion(predictions, targets, fold_weight)
-            
-            # average out loss across the batch
-            loss = loss.mean()
+           
+            loss = self.criterion(predictions, targets, fold_weight) 
             
             # reset gradients to zero
             self.optimizer.zero_grad()
@@ -261,6 +307,7 @@ class BindingTrainer:
                 predictions = torch.exp(predictions) - 1e-6
                 targets = torch.exp(targets) - 1e-6
             
+            
             # track totals
             total_loss += loss.item()
             all_predictions.append(predictions.detach())
@@ -273,7 +320,7 @@ class BindingTrainer:
         epoch_predictions = torch.cat(all_predictions)
         epoch_targets = torch.cat(all_targets)
         metrics = calculate_metrics(epoch_predictions, epoch_targets)
-        metrics['loss'] = total_loss / len(train_loader)
+        metrics['loss'] = total_loss #/ len(train_loader)
         
         return metrics, epoch_predictions, epoch_targets
     
@@ -303,7 +350,8 @@ class BindingTrainer:
                     concentration
                 )
 
-                loss = self.criterion(predictions, targets, fold_weight).mean()
+                loss = self.criterion(predictions, targets, fold_weight)
+                
                 
                 # revert predictions and targets to original values for original analysis if using log transform
                 if self.config.log_predict:
@@ -327,7 +375,7 @@ class BindingTrainer:
         print(f"Highest prediction value: {max_prediction:.6f}")
         
         metrics = calculate_metrics(val_predictions, val_targets)
-        metrics['loss'] = total_loss / len(val_loader)
+        metrics['loss'] = total_loss #/ len(val_loader)
         
         return metrics, val_predictions, val_targets
     
@@ -647,6 +695,7 @@ class BindingTrainer:
             proteins_df,
             self.glycan_encoder,
             self.protein_encoder,
+            self.config.glycan_type,
             self.config.random_state,
             self.config.split_mode,
             self.config.use_kfold,
@@ -863,6 +912,7 @@ class BindingTrainer:
             'glycan_encoder_type', 
             'protein_encoder_type', 
             'binding_predictor_type',
+            'loss_type',
             'best_train_loss', 
             'best_val_loss',
             'best_train_mse',
