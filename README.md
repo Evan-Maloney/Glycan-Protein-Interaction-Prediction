@@ -37,6 +37,8 @@ conda install ipykernel
 conda install conda-forge::biopython
 
 conda install pytorch::pytorch
+
+conda install conda-forge::pytorch_geometric     (For Graph NN)
 ```
 
 Run this to see all the packages installed in your current enviornment. Look for pandas, rdkit, ipykernel. (The rest of the packages are dependencies of these packages that were installed as well)

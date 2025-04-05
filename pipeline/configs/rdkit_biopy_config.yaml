@@ -6,15 +6,23 @@ proteins_data_path: "data/Protein-Sequence-Table.txt"
 glycan_encoder_type: "rdkit"
 protein_encoder_type: "biopy"
 binding_predictor_type: "dummy"
-k_folds: 8
-num_epochs: 5
+glycan_type: 'SMILES'
+loss_type: 'mse' # loss types: 'mse', 'rmse', 'rmsle', 'mae', 'log_mae', 'huber', 'smooth_l1' 
+num_epochs: 10
 batch_size: 32
-learning_rate: 0.001
-checkpoint_frequency: 2
+learning_rate: 0.005
+checkpoint_frequency: 3 # every nth epoch save the model weights (in this example every 3rd epoch so saves at epoch 3, 6, 9, ...)
 train_final_model: False # if want to train and save the model on the best found params from cross val usinmg the entire training set.
+log_predict: True # tranform our target to log(1+target) (log1p()) so that we dont train the model to predict all zeros (reverted on predictions output with expm1())
 random_state: 42
+# if not using kfold make sure to specify your val_split (the % of each glycan and protein class to split_mode combine into the validation set)
+use_kfold: False # recomended to not use kfold if using split_mode AND as the splitting % vary greatly
+split_mode: 'AND'
 # optional
-val_split: 0.2
+val_split: 0.5
+k_folds: 3
 device: "cpu"
 model_specific_params: {}
 hf_auth: False
+beta: 1.0 # beta val for smooth_l1_loss loss_type
+delta: 1.0 # delta val for huber loss_type

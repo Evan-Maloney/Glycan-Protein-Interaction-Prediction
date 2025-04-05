@@ -206,7 +206,7 @@ def cluster_proteins(proteins, n_clusters):
     return proteins
 
 
-def stratified_train_test_split(fractions_df, glycans_df, proteins_df, test_size, random_state):
+def stratified_train_test_split(fractions_df, glycans_df, proteins_df, test_size, random_state, mode='AND'):
     """
     Create a stratified train-test split where:
     1. Test set has unique GlycanIDs and ProteinGroups not seen in training
@@ -271,21 +271,44 @@ def stratified_train_test_split(fractions_df, glycans_df, proteins_df, test_size
         cluster_proteins = unique_proteins[unique_proteins['cluster_label'] == cluster]['ProteinGroup'].tolist()
         selected = np.random.choice(cluster_proteins, size=min(target_count, len(cluster_proteins)), replace=False)
         test_proteins.extend(selected)
+        
+        
+    if mode == 'AND':
+        
+        is_test = ((fractions_df['GlycanID'].isin(test_glycans)) & 
+                (fractions_df['ProteinGroup'].isin(test_proteins)))
+
+        is_train = ((~fractions_df['GlycanID'].isin(test_glycans)) & 
+                        (~fractions_df['ProteinGroup'].isin(test_proteins)))
+                
+        test_indices = fractions_df[is_test].index
+
+        train_indices = fractions_df[is_train].index
+        
+        print(f'-------------Test size (% of glycans and proteins as combinations in test set): {test_size*100}% -------------')
+
+        print(f'train size: {len(train_indices)}, test size: {len(test_indices)}, total: {len(fractions_df)}')
+                
+        print(f'train size: {round((len(train_indices)/len(fractions_df))*100, 2)}%, test size: {round((len(test_indices)/len(fractions_df))*100, 2)}%')
+        
+        print(f'test size % in terms of test/(training+test) size: {round((len(test_indices)/(len(train_indices)+len(test_indices)))*100, 2)}%')
+        
+        print(f'Total % of dataset used: {round(((len(train_indices)+len(test_indices))/len(fractions_df))*100, 2)}%\n')
     
-    # Create train and test masks
-    is_test = ((fractions_with_clusters['GlycanID'].isin(test_glycans)) | 
-               (fractions_with_clusters['ProteinGroup'].isin(test_proteins)))
+    else:
     
-    test_indices = fractions_with_clusters[is_test].index
-    train_indices = fractions_with_clusters[~is_test].index
+        # Create train and test masks
+        is_test = ((fractions_with_clusters['GlycanID'].isin(test_glycans)) | 
+                (fractions_with_clusters['ProteinGroup'].isin(test_proteins)))
+        
+        test_indices = fractions_with_clusters[is_test].index
+        train_indices = fractions_with_clusters[~is_test].index
     
-    #train_data = fractions_df.loc[train_indices]
-    #test_data = fractions_df.loc[test_indices]
     
     return train_indices, test_indices
 
 
-def stratified_kfold_split(fractions_df, glycans_df, proteins_df, n_splits, random_state):
+def stratified_kfold_split(fractions_df, glycans_df, proteins_df, n_splits, random_state, mode='AND'):
     """
     Create a stratified k-fold split where each fold:
     1. Contains unique GlycanIDs and ProteinGroups not seen in training
@@ -353,16 +376,29 @@ def stratified_kfold_split(fractions_df, glycans_df, proteins_df, n_splits, rand
         test_proteins = []
         for cluster, fold_lists in protein_folds.items():
             test_proteins.extend(fold_lists[fold_idx])
+            
         
-        # if one of the test_glycans OR one of the test_proteins is in this sample then put it in test, otherwise put it in train
-        # becuase of this functionality we need a larger k_fold (something like 8) to get a test_size of around 20% as the OR operation grabs a lot of samples if the test_glycans and test_proteins is high
-        # ex: k_fold=2: test_glycans=[50% of our glycans], test_proteins=[50% of our proteins] --> 50% of glycans OR 50% of proteins ~= 80% samples. (This creates a test set of size 80%)
-        is_test = ((fractions_df['GlycanID'].isin(test_glycans)) | 
+        if mode=='AND':
+            is_test = ((fractions_df['GlycanID'].isin(test_glycans)) & 
                    (fractions_df['ProteinGroup'].isin(test_proteins)))
         
-        test_indices = fractions_df[is_test].index
-        train_indices = fractions_df[~is_test].index
+            is_train = ((~fractions_df['GlycanID'].isin(test_glycans)) & 
+                    (~fractions_df['ProteinGroup'].isin(test_proteins)))
+            
+            train_indices = fractions_df[is_train].index
         
+        else:
+        
+            # if one of the test_glycans OR one of the test_proteins is in this sample then put it in test, otherwise put it in train
+            # becuase of this functionality we need a larger k_fold (something like 8) to get a test_size of around 20% as the OR operation grabs a lot of samples if the test_glycans and test_proteins is high
+            # ex: k_fold=2: test_glycans=[50% of our glycans], test_proteins=[50% of our proteins] --> 50% of glycans OR 50% of proteins ~= 80% samples. (This creates a test set of size 80%)
+            is_test = ((fractions_df['GlycanID'].isin(test_glycans)) | 
+                    (fractions_df['ProteinGroup'].isin(test_proteins)))
+            
+            train_indices = fractions_df[~is_test].index
+            
+        
+        test_indices = fractions_df[is_test].index
         fold_indices.append((train_indices, test_indices))
     
     
@@ -373,25 +409,6 @@ def stratified_kfold_split(fractions_df, glycans_df, proteins_df, n_splits, rand
     
     return fold_indices
 
-# this should be used instead inside /models dir file so each person can try their own encoding with own features
-def add_feature_to_encoding(encoding, feature_list):
-    """
-    Encode a batch of encoding with additional features
-    
-    Args:
-        encoding: tensor of encoding batch
-        feature_list: List of additional feature values (same height as encoding)
-    
-    Returns:
-        Tensor of shape [len(smiles_list), embedding_dim + n_features]
-    """
-    
-    features_tensor = torch.tensor(feature_list, dtype=torch.float32).view(-1, 1)  # Shape [n, 1]
-    
-    combined_encodings = torch.cat([encoding, features_tensor], dim=1)  # Shape [n, embedding_dim+1]
-    
-    return combined_encodings
-    
 
 def prepare_kfold_datasets(
     fractions_df: pd.DataFrame,
@@ -400,7 +417,8 @@ def prepare_kfold_datasets(
     k_folds: float,
     glycan_encoder: GlycanEncoder,
     protein_encoder: ProteinEncoder,
-    random_state: int
+    random_state: int,
+    split_mode: str,
 ) -> Tuple[Dataset, Dataset]:
     """
     Prepare train and validation datasets
@@ -431,7 +449,59 @@ def prepare_kfold_datasets(
     proteins_df = cluster_proteins(proteins_df, n_protein_clusters)
     
     # need to cluster both glycans and proteins so that we can create a stratified k-fold split for training 
-    full_indicies = stratified_kfold_split(fractions_df, glycans_df, proteins_df, k_folds, random_state)
+    full_indicies = stratified_kfold_split(fractions_df, glycans_df, proteins_df, k_folds, random_state, split_mode)
     
+    
+    return full_indicies, glycan_encodings, protein_encodings
+
+def prepare_train_val_datasets(
+    fractions_df: pd.DataFrame,
+    glycans_df: pd.DataFrame,
+    proteins_df: pd.DataFrame,
+    glycan_encoder: GlycanEncoder,
+    protein_encoder: ProteinEncoder,
+    glycan_type: str,
+    random_state: int,
+    split_mode: str,
+    use_kfolds: bool,
+    k_folds: float,
+    val_split: float,
+    device: torch.device
+) -> Tuple[Dataset, Dataset]:
+    """
+    Prepare train and validation datasets
+    
+    Args:
+        df: Full dataset DataFrame
+        val_split: Fraction of data to use for validation
+        glycan_encoder: Encoder for glycans
+        protein_encoder: Encoder for proteins
+    
+    Returns:
+        Tuple of train and validation datasets
+    """
+    
+    # for each glycan create a glycan_encoding feature where we use glycan_encoder to encode the SMILES
+    # for each protein create a protein_encoding feature where we use protein_encoder to encode the aminoacids
+    glycan_encodings = glycan_encoder.encode_batch(glycans_df[glycan_type].tolist(), device)
+    protein_encodings = protein_encoder.encode_batch(proteins_df['Amino Acid Sequence'].tolist(), device)
+    
+    
+    # Might move to config but leave for now as our train and test are clusterd and stratified using these parameters
+    radius = 3
+    fp_size = 1024
+    n_clusters = 3
+    glycans_df = cluster_glycans(glycans_df, radius, fp_size, n_clusters)
+    
+    n_protein_clusters = 3
+    proteins_df = cluster_proteins(proteins_df, n_protein_clusters)
+    
+    if use_kfolds:
+        # need to cluster both glycans and proteins so that we can create a stratified k-fold split for training 
+        full_indicies = stratified_kfold_split(fractions_df, glycans_df, proteins_df, k_folds, random_state, split_mode)
+    else:
+        train_indicies, test_indicies = stratified_train_test_split(fractions_df, glycans_df, proteins_df, val_split, random_state, split_mode)
+        # convert to kfold format so we can use the same code
+        full_indicies = [(train_indicies, test_indicies)]
     
     return full_indicies, glycan_encodings, protein_encodings

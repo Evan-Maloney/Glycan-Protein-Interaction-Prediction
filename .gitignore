@@ -2,3 +2,13 @@
 __pycache__/
 pipeline/Miniconda3-latest-Linux-x86_64.sh
 pipeline/experiments/
+
+pipeline/experiments_summary.csv
+
+pipeline/data/GlycanML/glycanML_glycan_interactions.tsv
+
+multitask_training/glyML_train_dataset.pkl
+
+multitask_training/glyML_val_dataset.pkl
+
+pipeline/data/BindingDB/BindingDB_All.tsv

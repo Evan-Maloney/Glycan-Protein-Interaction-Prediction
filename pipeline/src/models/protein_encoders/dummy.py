@@ -7,13 +7,13 @@ class DummyProteinEncoder(ProteinEncoder):
         super().__init__()
         self._embedding_dim = embedding_dim
     
-    def encode_sequence(self, sequence: str) -> torch.Tensor:
+    def encode_sequence(self, sequence: str, device: torch.device) -> torch.Tensor:
         """Returns random embedding for any protein sequence"""
-        return torch.randn(self._embedding_dim)
+        return torch.randn(self._embedding_dim).to(device)
     
-    def encode_batch(self, batch_data: List[str]) -> torch.Tensor:
+    def encode_batch(self, batch_data: List[str], device: torch.device) -> torch.Tensor:
         """Returns batch of random embeddings"""
-        return torch.randn(len(batch_data), self._embedding_dim)
+        return torch.randn(len(batch_data), self._embedding_dim).to(device)
     
     @property
     def embedding_dim(self) -> int:
