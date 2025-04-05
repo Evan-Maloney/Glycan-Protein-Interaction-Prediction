@@ -6,6 +6,8 @@ proteins_data_path: "data/Protein-Sequence-Table.txt"
 glycan_encoder_type: "mpnn"
 protein_encoder_type: "biopy"
 binding_predictor_type: "dnn"
+glycan_type: 'SMILES'
+loss_type: 'mse' # loss types: 'mse', 'rmse', 'rmsle', 'mae', 'log_mae', 'huber', 'smooth_l1' 
 num_epochs: 10
 batch_size: 32
 learning_rate: 0.005
@@ -22,3 +24,5 @@ k_folds: 3
 device: "cpu"
 model_specific_params: {}
 hf_auth: False
+beta: 1.0 # beta val for smooth_l1_loss loss_type
+delta: 1.0 # delta val for huber loss_type
