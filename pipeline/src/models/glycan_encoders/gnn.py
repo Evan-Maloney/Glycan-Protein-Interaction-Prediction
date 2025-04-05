@@ -217,12 +217,9 @@ class GNNGlycanEncoder(GlycanEncoder):
         for smiles in batch_data:
             embedding = self.encode_smiles(smiles, device)
             batch_embeddings.append(embedding)
-<<<<<<< HEAD
         #for iupac in batch_data:
             #embedding = self.encode_iupac(iupac, device)
             #batch_embeddings.append(embedding)
-=======
->>>>>>> main
         
         # Stack all embeddings
         batch = torch.cat(batch_embeddings, dim=0)
