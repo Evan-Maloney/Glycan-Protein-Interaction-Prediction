@@ -161,19 +161,15 @@ class LossesClass(nn.Module):
             beta: Parameter for Smooth L1 loss
         """
         super().__init__()
+        
         self.loss_type = loss_type.lower()
         self.delta = delta
         self.beta = beta
+        
     def forward(self, inputs, targets, weights):
-        # Always ensure weights exist, default to ones if not provided
-        #if weights is None:
-            #weights = torch.ones_like(targets)
             
         # Check if all weights are approximately 1.0
-        # will only be done on batches so dont have to worry about floating point sum up error on 1.0 's
-        #print(weights)
-        all_ones = weights == 1.0 #sum(weights) == len(weights) #torch.all(torch.abs(weights - 1.0) < 1e-6)
-        #print('all ones:', all_ones)
+        all_ones = weights == 1.0 
         # Handle loss types that can use weights directly
         if self.loss_type == 'mse':
             loss = (inputs - targets)**2
@@ -879,7 +875,6 @@ class BindingTrainer:
             
             # Calculate average
             folds_count = len(fold_metrics)
-            print(fold_metrics)
             for key in epoch_metrics:
                 epoch_metrics[key] /= folds_count
             
