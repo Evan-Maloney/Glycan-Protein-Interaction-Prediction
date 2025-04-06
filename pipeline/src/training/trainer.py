@@ -162,6 +162,10 @@ class LossesClass(nn.Module):
         """
         super().__init__()
         
+        self.loss_type = loss_type.lower()
+        self.delta = delta
+        self.beta = beta
+        
     def forward(self, inputs, targets, weights):
             
         # Check if all weights are approximately 1.0
