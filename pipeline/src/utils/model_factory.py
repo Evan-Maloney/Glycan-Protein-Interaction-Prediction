@@ -14,6 +14,7 @@ from ..models.protein_encoders.biopy import BioPyProteinEncoder
 
 from ..models.binding_predictors.dnn import DNNBindingPredictor
 from ..models.protein_encoders.esmc import ESMCEncoder
+
 from ..models.binding_predictors.attention import AttentionFusionBindingPredictor
 
 from ..models.protein_encoders.pt_gnn import AdvancedGNNProteinEncoder
@@ -21,6 +22,10 @@ from ..models.protein_encoders.lstm import LSTMProteinEncoder
 
 from ..models.binding_predictors.mean_predictor import MeanPredictor
 from ..models.binding_predictors.zero_predictor import ZeroPredictor
+
+
+from ..models.protein_encoders.biopy import BioPyProteinEncoder
+from ..models.protein_encoders.esm2_320 import ESM2Encoder
 
 
 
@@ -46,7 +51,8 @@ def create_protein_encoder(encoder_type: str, **kwargs) -> Any:
         'esmc': ESMCEncoder,
         'biopy': BioPyProteinEncoder,
         'pt_gnn': AdvancedGNNProteinEncoder,
-        'lstm': LSTMProteinEncoder
+        'lstm': LSTMProteinEncoder,
+        'esm2': ESM2Encoder
     }
 
     encoder = encoders[encoder_type]

@@ -161,7 +161,9 @@ class LossesClass(nn.Module):
             beta: Parameter for Smooth L1 loss
         """
         super().__init__()
-        
+        self.loss_type = loss_type.lower()
+        self.delta = delta
+        self.beta = beta
     def forward(self, inputs, targets, weights):
         # Always ensure weights exist, default to ones if not provided
         #if weights is None:
@@ -877,6 +879,7 @@ class BindingTrainer:
             
             # Calculate average
             folds_count = len(fold_metrics)
+            print(fold_metrics)
             for key in epoch_metrics:
                 epoch_metrics[key] /= folds_count
             

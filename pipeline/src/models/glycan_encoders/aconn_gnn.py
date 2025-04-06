@@ -74,6 +74,9 @@ class ACONNEncoder(GlycanEncoder):
         """
         return self.forward(smiles, device)
     
+    def encode_iupac(self, iupacs: str, device: torch.device) -> torch.Tensor:
+        pass
+
     def encode_batch(self, smiles_list, device):
         """
         Encode a list of SMILES strings into a batch of graph embeddings.
