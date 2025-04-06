@@ -1,14 +1,10 @@
-# References:
-# https://github.com/victoresque/pytorch-template/blob/master/base/base_trainer.py
-# Used GitHub Copilot to generate parts of this script (I provided the pytorch base_trainer as a prompt)
-# Used Claude 3.7 to update to cross val
-
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader, Dataset
 import torch.nn.functional as F
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 from pathlib import Path
 from typing import Dict, Tuple
 from datetime import datetime
@@ -165,9 +161,6 @@ class LossesClass(nn.Module):
             beta: Parameter for Smooth L1 loss
         """
         super().__init__()
-        self.loss_type = loss_type.lower()
-        self.delta = delta
-        self.beta = beta
         
     def forward(self, inputs, targets, weights):
             
@@ -285,21 +278,13 @@ class BindingTrainer:
             targets = batch['target'].to(self.device)
             
             if self.config.log_predict:
-                #print('targets before BEFORE', targets)
-                #old_targets = targets.clone().detach()
-                #print('targets before', old_targets)
-                #targets = torch.log1p(targets)
                 targets = torch.log(targets + 1e-6)
-                #print('targets after', targets)
             
             predictions = self.binding_predictor(
                 glycan_encoding,
                 protein_encoding,
                 concentration
             )
-
-            #print('***predictions***')
-            #print(predictions)
             
            
             loss = self.criterion(predictions, targets, fold_weight) 
@@ -313,8 +298,8 @@ class BindingTrainer:
             
             # revert predictions and targets to original values for original analysis if using log transform
             if self.config.log_predict:
-                predictions = torch.exp(predictions) - 1e-6 #torch.expm1(predictions)
-                targets = torch.exp(targets) - 1e-6 #torch.expm1(targets)
+                predictions = torch.exp(predictions) - 1e-6
+                targets = torch.exp(targets) - 1e-6
             
             
             # track totals
@@ -331,7 +316,7 @@ class BindingTrainer:
         metrics = calculate_metrics(epoch_predictions, epoch_targets)
         metrics['loss'] = total_loss #/ len(train_loader)
         
-        return metrics
+        return metrics, epoch_predictions, epoch_targets
     
     def _validate(self, val_loader: DataLoader, fold_weight: int) -> Dict[str, float]:
         self.glycan_encoder.eval()
@@ -351,7 +336,7 @@ class BindingTrainer:
                 targets = batch['target'].to(self.device)
                 
                 if self.config.log_predict:
-                    targets = torch.log(targets + 1e-6) #torch.log1p(targets)
+                    targets = torch.log(targets + 1e-6)
                 
                 predictions = self.binding_predictor(
                     glycan_encoding,
@@ -364,8 +349,8 @@ class BindingTrainer:
                 
                 # revert predictions and targets to original values for original analysis if using log transform
                 if self.config.log_predict:
-                    predictions = torch.exp(predictions) - 1e-6 #torch.expm1(predictions)
-                    targets = torch.exp(targets) - 1e-6 #torch.expm1(targets)
+                    predictions = torch.exp(predictions) - 1e-6
+                    targets = torch.exp(targets) - 1e-6
                 
                 # track totals
                 total_loss += loss.item()
@@ -378,10 +363,15 @@ class BindingTrainer:
         # save metrics
         val_predictions = torch.cat(all_predictions)
         val_targets = torch.cat(all_targets)
+        
+        # Print out the single highest prediction
+        max_prediction = torch.max(val_predictions).item()
+        print(f"Highest prediction value: {max_prediction:.6f}")
+        
         metrics = calculate_metrics(val_predictions, val_targets)
         metrics['loss'] = total_loss #/ len(val_loader)
         
-        return metrics
+        return metrics, val_predictions, val_targets
     
     def save_checkpoint(self, fold: int = None, epoch: int = None):
         # https://pytorch.org/tutorials/beginner/saving_loading_models.html
@@ -411,6 +401,169 @@ class BindingTrainer:
             checkpoint_dir / checkpoint_name
         )
     
+    def create_error_histogram(self, predictions, targets, prefix="", train_predictions=None, train_targets=None):
+        """
+        Create histograms of prediction errors: 
+        1. Stacked raw error distribution with best fit line
+        2. Stacked absolute error histogram (without best fit line)
+        
+        Args:
+            predictions: Tensor of predictions (validation set)
+            targets: Tensor of target values (validation set)
+            prefix: Optional prefix for the filename (e.g., 'train', 'val', 'final')
+            train_predictions: Optional tensor of training predictions for comparison
+            train_targets: Optional tensor of training targets for comparison
+        """
+        prefix = f"{self.config.protein_encoder_type}_{self.config.glycan_encoder_type}_{self.config.binding_predictor_type}"
+
+        # Convert tensors to numpy
+        predictions_np = predictions.cpu().numpy().flatten()
+        targets_np = targets.cpu().numpy().flatten()
+        
+        # Calculate errors (absolute and raw)
+        absolute_errors = np.abs(predictions_np - targets_np)
+        raw_errors = predictions_np - targets_np  # For distribution with negative values
+        
+        # Process training data if provided
+        has_training_data = train_predictions is not None and train_targets is not None
+        
+        if has_training_data:
+            train_predictions_np = train_predictions.cpu().numpy().flatten()
+            train_targets_np = train_targets.cpu().numpy().flatten()
+            train_absolute_errors = np.abs(train_predictions_np - train_targets_np)
+            train_raw_errors = train_predictions_np - train_targets_np
+        
+        # Determine bin parameters
+        bins = 30
+        
+        # Save dir
+        plots_dir = self.experiment_dir / 'plots'
+        plots_dir.mkdir(exist_ok=True)
+        
+        # 1. Absolute Error Histogram (Stacked, no best fit line)
+        plt.figure(figsize=(10, 6))
+        
+        # Calculate the maximum range for the bins
+        max_error = absolute_errors.max()
+        if has_training_data:
+            max_error = max(max_error, train_absolute_errors.max())
+        
+        # Create bins with a little buffer
+        hist_bins = np.linspace(0, max_error * 1.05, bins)
+        
+        if has_training_data:
+            # Create a stacked histogram
+            plt.hist([absolute_errors, train_absolute_errors], bins=hist_bins, 
+                    label=['Validation', 'Training'], alpha=0.7, 
+                    color=['skyblue', 'teal'], edgecolor=['navy', 'darkgreen'],
+                    stacked=True)
+        else:
+            # Plot just validation histogram
+            plt.hist(absolute_errors, bins=hist_bins, alpha=0.7, 
+                    color='skyblue', edgecolor='navy', label='Validation')
+        
+        plt.xlabel('Absolute Error')
+        plt.ylabel('Count')
+        plt.title(f'{prefix} Absolute Error Distribution')
+        plt.grid(True, alpha=0.3)
+        plt.legend()
+        
+        # Add stats to the plot
+        mean_error = np.mean(absolute_errors)
+        median_error = np.median(absolute_errors)
+        
+        if has_training_data:
+            train_mean_error = np.mean(train_absolute_errors)
+            train_median_error = np.median(train_absolute_errors)
+            combined_abs_errors = np.concatenate([absolute_errors, train_absolute_errors])
+            combined_mean = np.mean(combined_abs_errors)
+            combined_median = np.median(combined_abs_errors)
+            stats_text = f'Combined Mean: {combined_mean:.4f}\nCombined Median: {combined_median:.4f}'
+        else:
+            stats_text = f'Mean: {mean_error:.4f}\nMedian: {median_error:.4f}'
+        
+        plt.annotate(stats_text, xy=(0.65, 0.75), xycoords='axes fraction', 
+                    bbox=dict(boxstyle="round,pad=0.5", fc="white", alpha=0.8))
+        
+        # Save the absolute error plot
+        plt.savefig(plots_dir / f'{prefix}_absolute_error.png')
+        plt.close()
+        
+        # 2. Raw Error Distribution (Stacked with negative values and best fit line)
+        plt.figure(figsize=(10, 6))
+        
+        # Calculate the maximum range for the bins
+        min_raw_error = raw_errors.min()
+        max_raw_error = raw_errors.max()
+        
+        if has_training_data:
+            min_raw_error = min(min_raw_error, train_raw_errors.min())
+            max_raw_error = max(max_raw_error, train_raw_errors.max())
+        
+        # Create bins
+        raw_hist_bins = np.linspace(min_raw_error * 1.05, max_raw_error * 1.05, bins)
+        
+        if has_training_data:
+            # Create a stacked histogram for raw errors
+            plt.hist([raw_errors, train_raw_errors], bins=raw_hist_bins, 
+                    label=['Validation', 'Training'], alpha=0.7, 
+                    color=['skyblue', 'teal'], edgecolor=['navy', 'darkgreen'],
+                    stacked=True)
+            
+            # Add a single KDE curve for combined data
+            from scipy.stats import gaussian_kde
+            x_range = np.linspace(min_raw_error * 1.05, max_raw_error * 1.05, 1000)
+            combined_raw_errors = np.concatenate([raw_errors, train_raw_errors])
+            
+            if len(combined_raw_errors) > 1:
+                combined_kde = gaussian_kde(combined_raw_errors)
+                plt.plot(x_range, combined_kde(x_range) * len(combined_raw_errors) * (raw_hist_bins[1] - raw_hist_bins[0]), 
+                        'r-', linewidth=2, label='Error Distribution')
+        else:
+            # Plot just validation histogram
+            plt.hist(raw_errors, bins=raw_hist_bins, alpha=0.7, 
+                    color='skyblue', edgecolor='navy', label='Validation')
+            
+            if len(raw_errors) > 1:
+                from scipy.stats import gaussian_kde
+                x_range = np.linspace(min_raw_error * 1.05, max_raw_error * 1.05, 1000)
+                val_kde = gaussian_kde(raw_errors)
+                plt.plot(x_range, val_kde(x_range) * len(raw_errors) * (raw_hist_bins[1] - raw_hist_bins[0]), 
+                        'r-', linewidth=2, label='Error Distribution')
+        
+        plt.axvline(x=0, color='black', linestyle='--', alpha=0.7)
+        plt.xlabel('Error (Predicted - Actual)')
+        plt.ylabel('Count')
+        plt.title(f'{prefix} Error Distribution')
+        plt.grid(True, alpha=0.3)
+        plt.legend()
+        
+        # Add stats
+        if has_training_data:
+            mean_raw_error = np.mean(combined_raw_errors)
+            std_raw_error = np.std(combined_raw_errors)
+        else:
+            mean_raw_error = np.mean(raw_errors)
+            std_raw_error = np.std(raw_errors)
+        
+        stats_text = f'Mean: {mean_raw_error:.4f}\nStd Dev: {std_raw_error:.4f}'
+        plt.annotate(stats_text, xy=(0.05, 0.75), xycoords='axes fraction', 
+                    bbox=dict(boxstyle="round,pad=0.5", fc="white", alpha=0.8))
+        
+        # Save the raw error plot
+        plt.savefig(plots_dir / f'{prefix}_error_distribution.png')
+        plt.close()
+        
+        # Return statistics for logging
+        result = {
+            'mean_abs_error': mean_error if not has_training_data else combined_mean,
+            'median_abs_error': median_error if not has_training_data else combined_median,
+            'mean_raw_error': mean_raw_error,
+            'std_raw_error': std_raw_error
+        }
+            
+        return result
+
     def plot_metrics(self, metrics_df: pd.DataFrame, fold_metrics_df: pd.DataFrame = None):
         plots_dir = self.experiment_dir / 'plots'
         plots_dir.mkdir(exist_ok=True)
@@ -490,14 +643,34 @@ class BindingTrainer:
             plt.savefig(plots_dir / 'fold_pearson_curves.png')
             plt.close()
     
-    def train(self, fractions_df: pd.DataFrame, glycans_df: pd.DataFrame, proteins_df: pd.DataFrame):
-        # # Log experiment configuration
-        # config_path = self.experiment_dir / 'config.txt'
-        # with open(config_path, 'w') as f:
-        #     f.write(f"Experiment ID: {self.experiment_id}\n")
-        #     for key, value in vars(self.config).items():
-        #         f.write(f"{key}: {value}\n")
+    def save_worst_predictions(self, samples_df: pd.DataFrame, predictions: torch.Tensor, targets: torch.Tensor, num_samples: int = 10):
+        """
+        Save the worst sample predictions (based on highest absolute error) to an Excel file.
         
+        Args:
+            samples_df: DataFrame corresponding to the validation samples (must include identifying columns, e.g. GlycanID, ProteinGroup, etc.)
+            predictions: Tensor of predictions (from validation)
+            targets: Tensor of target values (from validation)
+            num_samples: Number of worst samples to save (default is 10)
+        """
+        # Convert tensors to numpy arrays
+        predictions_np = predictions.cpu().numpy().flatten()
+        
+        targets_np = samples_df['f'].values
+        
+        absolute_errors = np.abs(predictions_np - targets_np)
+        
+        worst_df = samples_df.copy()
+        worst_df['Prediction'] = predictions_np
+        worst_df['Target'] = targets_np  # This is now identical to the f column
+        worst_df['Absolute_Error'] = absolute_errors
+        
+        worst_df = worst_df.sort_values(by='Absolute_Error', ascending=False).head(num_samples)
+        
+        output_file = self.experiment_dir / 'worst_predictions.csv'
+        worst_df.to_csv(output_file, index=False)
+
+    def train(self, fractions_df: pd.DataFrame, glycans_df: pd.DataFrame, proteins_df: pd.DataFrame):
         # common metrics tracking
         all_metrics = {
             'train_loss': [],
@@ -597,9 +770,44 @@ class BindingTrainer:
                 print(f"\nEpoch {epoch + 1}/{self.config.num_epochs}")
                 
                 # if no k-fold then fold_weight is just 1
-                train_metrics = self._train_epoch(train_loader, fold_weight)
-                val_metrics = self._validate(val_loader, fold_weight)
-
+                train_metrics, train_predictions, train_targets = self._train_epoch(train_loader, fold_weight)
+                val_metrics, val_predictions, val_targets = self._validate(val_loader, fold_weight)
+                
+                # Create histograms for the last epoch and save worst predictions
+                if epoch == self.config.num_epochs - 1:
+                    error_stats = self.create_error_histogram(
+                        val_predictions, val_targets, 
+                        prefix=f"fold{fold_idx}_final",
+                        train_predictions=train_predictions, 
+                        train_targets=train_targets
+                    )
+                    # Save the worst predictions from the validation set (uses the original val_data DataFrame)
+                    self.save_worst_predictions(val_data, val_predictions, val_targets)
+                    self.create_filtered_error_histogram(
+                        val_predictions, val_targets, val_data,
+                        target_threshold=0.2,
+                        prefix=f"fold{fold_idx}_high_targets_0.2",
+                        train_predictions=train_predictions,
+                        train_targets=train_targets,
+                        train_samples_df=train_data
+                    )
+                    
+                    # For targets > 0.5
+                    self.create_filtered_error_histogram(
+                        val_predictions, val_targets, val_data,
+                        target_threshold=0.5,
+                        prefix=f"fold{fold_idx}_high_targets_0.5",
+                        train_predictions=train_predictions,
+                        train_targets=train_targets,
+                        train_samples_df=train_data
+                    )
+                    
+                    # Save best predictions for high-value targets
+                    self.save_best_predictions_by_threshold(
+                        val_data, val_predictions, 
+                        thresholds=[0.2, 0.5], 
+                        num_samples=10
+                    )
                 
                 # Save metrics for this fold/run
                 timestamp = datetime.now().isoformat()
@@ -640,8 +848,7 @@ class BindingTrainer:
                 'train_metrics': fold_train_metrics,
                 'val_metrics': fold_val_metrics
             })
-        
-        # For k-fold, calculate average metrics across all folds
+            # For k-fold, calculate average metrics across all folds
         # For regular training, this will just process the single "fold"
         for epoch in range(self.config.num_epochs):
             epoch_metrics = {
@@ -749,3 +956,274 @@ class BindingTrainer:
             
             # Save the final model
             self.save_checkpoint()
+    def create_filtered_error_histogram(self, predictions, targets, samples_df, target_threshold=0.5, 
+                               prefix="filtered", train_predictions=None, train_targets=None, 
+                               train_samples_df=None):
+        """
+        Create histograms of prediction errors for samples where the target is above a threshold.
+        
+        Args:
+            predictions: Tensor of predictions (validation set)
+            targets: Tensor of target values (validation set)
+            samples_df: DataFrame with sample data corresponding to predictions/targets
+            target_threshold: Filter for targets above this value (default 0.5)
+            prefix: Optional prefix for the filename (e.g., 'high_targets')
+            train_predictions: Optional tensor of training predictions for comparison
+            train_targets: Optional tensor of training targets for comparison
+            train_samples_df: DataFrame with sample data for training set
+        """
+        prefix = f"{self.config.protein_encoder_type}_{self.config.glycan_encoder_type}_{self.config.binding_predictor_type}_{prefix}"
+
+        # Convert targets to numpy to match samples_df shape
+        predictions_np = predictions.cpu().numpy().flatten()
+        
+        # Instead of using potentially misaligned targets, get them from the DataFrame
+        targets_np = samples_df['f'].values
+        
+        # Create filter mask for high-value targets
+        high_targets_mask = targets_np > target_threshold
+        
+        # Apply the filter to get only high-value targets and their predictions
+        filtered_predictions = predictions_np[high_targets_mask]
+        filtered_targets = targets_np[high_targets_mask]
+        
+        # Skip if there are no samples above the threshold
+        if len(filtered_targets) == 0:
+            print(f"No samples with targets above {target_threshold} found.")
+            return None
+        
+        # Calculate errors (absolute and raw)
+        absolute_errors = np.abs(filtered_predictions - filtered_targets)
+        raw_errors = filtered_predictions - filtered_targets
+        
+        # Process training data if provided
+        has_training_data = (train_predictions is not None and train_targets is not None 
+                            and train_samples_df is not None)
+        
+        if has_training_data:
+            train_predictions_np = train_predictions.cpu().numpy().flatten()
+            train_targets_np = train_samples_df['f'].values
+            
+            # Filter training data as well
+            train_high_targets_mask = train_targets_np > target_threshold
+            train_filtered_predictions = train_predictions_np[train_high_targets_mask]
+            train_filtered_targets = train_targets_np[train_high_targets_mask]
+            
+            # Calculate errors for filtered training data
+            train_absolute_errors = np.abs(train_filtered_predictions - train_filtered_targets)
+            train_raw_errors = train_filtered_predictions - train_filtered_targets
+        
+        # Determine bin parameters
+        bins = 30
+        
+        # Save dir
+        plots_dir = self.experiment_dir / 'plots'
+        plots_dir.mkdir(exist_ok=True)
+        
+        # 1. Absolute Error Histogram (Stacked, no best fit line)
+        plt.figure(figsize=(10, 6))
+        
+        # Calculate the maximum range for the bins
+        max_error = absolute_errors.max() if len(absolute_errors) > 0 else 1.0
+        if has_training_data and len(train_absolute_errors) > 0:
+            max_error = max(max_error, train_absolute_errors.max())
+        
+        # Create bins with a little buffer
+        hist_bins = np.linspace(0, max_error * 1.05, bins)
+        
+        if has_training_data and len(train_filtered_targets) > 0 and len(filtered_targets) > 0:
+            # Create a stacked histogram
+            plt.hist([absolute_errors, train_absolute_errors], bins=hist_bins, 
+                    label=['Validation', 'Training'], alpha=0.7, 
+                    color=['skyblue', 'teal'], edgecolor=['navy', 'darkgreen'],
+                    stacked=True)
+        elif len(filtered_targets) > 0:
+            # Plot just validation histogram
+            plt.hist(absolute_errors, bins=hist_bins, alpha=0.7, 
+                    color='skyblue', edgecolor='navy', label='Validation')
+        
+        plt.xlabel('Absolute Error')
+        plt.ylabel('Count')
+        plt.title(f'{prefix} Absolute Error Distribution (Targets > {target_threshold})')
+        plt.grid(True, alpha=0.3)
+        plt.legend()
+        
+        # Add stats to the plot
+        if len(filtered_targets) > 0:
+            mean_error = np.mean(absolute_errors)
+            median_error = np.median(absolute_errors)
+            
+            if has_training_data and len(train_filtered_targets) > 0:
+                train_mean_error = np.mean(train_absolute_errors)
+                train_median_error = np.median(train_absolute_errors)
+                combined_abs_errors = np.concatenate([absolute_errors, train_absolute_errors])
+                combined_mean = np.mean(combined_abs_errors)
+                combined_median = np.median(combined_abs_errors)
+                stats_text = f'Combined Mean: {combined_mean:.4f}\nCombined Median: {combined_median:.4f}'
+                stats_text += f'\nSamples: Val={len(filtered_targets)}, Train={len(train_filtered_targets)}'
+            else:
+                stats_text = f'Mean: {mean_error:.4f}\nMedian: {median_error:.4f}'
+                stats_text += f'\nSamples: {len(filtered_targets)}'
+            
+            plt.annotate(stats_text, xy=(0.65, 0.75), xycoords='axes fraction', 
+                        bbox=dict(boxstyle="round,pad=0.5", fc="white", alpha=0.8))
+        
+        # Save the absolute error plot
+        plt.savefig(plots_dir / f'{prefix}_absolute_error_threshold_{target_threshold}.png')
+        plt.close()
+        
+        # 2. Raw Error Distribution (Stacked with negative values and best fit line)
+        plt.figure(figsize=(10, 6))
+        
+        if len(filtered_targets) > 0:
+            # Calculate the maximum range for the bins
+            min_raw_error = raw_errors.min()
+            max_raw_error = raw_errors.max()
+            
+            if has_training_data and len(train_filtered_targets) > 0:
+                min_raw_error = min(min_raw_error, train_raw_errors.min())
+                max_raw_error = max(max_raw_error, train_raw_errors.max())
+            
+            # Create bins
+            raw_hist_bins = np.linspace(min_raw_error * 1.05, max_raw_error * 1.05, bins)
+            
+            if has_training_data and len(train_filtered_targets) > 0:
+                # Create a stacked histogram for raw errors
+                plt.hist([raw_errors, train_raw_errors], bins=raw_hist_bins, 
+                        label=['Validation', 'Training'], alpha=0.7, 
+                        color=['skyblue', 'teal'], edgecolor=['navy', 'darkgreen'],
+                        stacked=True)
+                
+                # Add a single KDE curve for combined data
+                from scipy.stats import gaussian_kde
+                x_range = np.linspace(min_raw_error * 1.05, max_raw_error * 1.05, 1000)
+                combined_raw_errors = np.concatenate([raw_errors, train_raw_errors])
+                
+                if len(combined_raw_errors) > 1:
+                    combined_kde = gaussian_kde(combined_raw_errors)
+                    plt.plot(x_range, combined_kde(x_range) * len(combined_raw_errors) * (raw_hist_bins[1] - raw_hist_bins[0]), 
+                            'r-', linewidth=2, label='Error Distribution')
+            else:
+                # Plot just validation histogram
+                plt.hist(raw_errors, bins=raw_hist_bins, alpha=0.7, 
+                        color='skyblue', edgecolor='navy', label='Validation')
+                
+                if len(raw_errors) > 1:
+                    from scipy.stats import gaussian_kde
+                    x_range = np.linspace(min_raw_error * 1.05, max_raw_error * 1.05, 1000)
+                    val_kde = gaussian_kde(raw_errors)
+                    plt.plot(x_range, val_kde(x_range) * len(raw_errors) * (raw_hist_bins[1] - raw_hist_bins[0]), 
+                            'r-', linewidth=2, label='Error Distribution')
+            
+            plt.axvline(x=0, color='black', linestyle='--', alpha=0.7)
+            plt.xlabel('Error (Predicted - Actual)')
+            plt.ylabel('Count')
+            plt.title(f'{prefix} Error Distribution (Targets > {target_threshold})')
+            plt.grid(True, alpha=0.3)
+            plt.legend()
+            
+            # Add stats
+            if has_training_data and len(train_filtered_targets) > 0:
+                mean_raw_error = np.mean(combined_raw_errors)
+                std_raw_error = np.std(combined_raw_errors)
+            else:
+                mean_raw_error = np.mean(raw_errors)
+                std_raw_error = np.std(raw_errors)
+            
+            stats_text = f'Mean: {mean_raw_error:.4f}\nStd Dev: {std_raw_error:.4f}'
+            plt.annotate(stats_text, xy=(0.05, 0.75), xycoords='axes fraction', 
+                        bbox=dict(boxstyle="round,pad=0.5", fc="white", alpha=0.8))
+        
+        # Save the raw error plot
+        plt.savefig(plots_dir / f'{prefix}_error_distribution_threshold_{target_threshold}.png')
+        plt.close()
+        
+        # Return statistics and sample counts for logging
+        if len(filtered_targets) > 0:
+            result = {
+                'mean_abs_error': mean_error if not has_training_data or len(train_filtered_targets) == 0 else combined_mean,
+                'median_abs_error': median_error if not has_training_data or len(train_filtered_targets) == 0 else combined_median,
+                'mean_raw_error': mean_raw_error,
+                'std_raw_error': std_raw_error,
+                'validation_samples': len(filtered_targets),
+                'training_samples': len(train_filtered_targets) if has_training_data else 0,
+                'threshold': target_threshold
+            }
+            return result
+        else:
+            return {
+                'validation_samples': 0,
+                'training_samples': 0,
+                'threshold': target_threshold
+            }
+
+    def save_best_predictions_by_threshold(self, samples_df: pd.DataFrame, predictions: torch.Tensor, 
+                                    thresholds: list = [0.2, 0.5], num_samples: int = 10):
+        """
+        Save the best predictions (based on lowest absolute error) for samples with targets above specified thresholds.
+        
+        Args:
+            samples_df: DataFrame corresponding to the validation samples
+            predictions: Tensor of predictions (from validation)
+            thresholds: List of target thresholds to filter by (default [0.2, 0.5])
+            num_samples: Number of best samples to save for each threshold (default is 10)
+        """
+        # Convert tensors to numpy arrays
+        predictions_np = predictions.cpu().numpy().flatten()
+        
+        # Get targets directly from the DataFrame's f column
+        targets_np = samples_df['f'].values
+        
+        # Calculate absolute errors
+        absolute_errors = np.abs(predictions_np - targets_np)
+        
+        # Create a copy of the DataFrame with predictions and errors
+        results_df = samples_df.copy()
+        results_df['Prediction'] = predictions_np
+        results_df['Target'] = targets_np
+        results_df['Absolute_Error'] = absolute_errors
+        
+        # Create output directory if it doesn't exist
+        output_dir = self.experiment_dir / 'predictions'
+        output_dir.mkdir(exist_ok=True)
+        
+        # For each threshold, filter and save the best predictions
+        for threshold in thresholds:
+            # Filter for samples above the threshold
+            filtered_df = results_df[results_df['Target'] > threshold].copy()
+            
+            # Check if we have any samples above the threshold
+            if len(filtered_df) == 0:
+                print(f"No samples with targets above {threshold} found.")
+                continue
+            
+            # Sort by absolute error (ascending) to get the best predictions
+            best_predictions = filtered_df.sort_values(by='Absolute_Error').head(num_samples)
+            
+            # Calculate and add relative error (percentage) for better comparison
+            best_predictions['Relative_Error'] = (best_predictions['Absolute_Error'] / best_predictions['Target']) * 100
+            
+            # Add some statistics at the bottom of the DataFrame
+            stats_df = pd.DataFrame({
+                'ProteinGroup': [f'Total samples > {threshold}:'],
+                'GlycanID': [len(filtered_df)],
+                'Target': [f'Mean Abs Error: {filtered_df["Absolute_Error"].mean():.4f}'],
+                'Prediction': [f'Mean Rel Error: {(filtered_df["Absolute_Error"] / filtered_df["Target"] * 100).mean():.2f}%'],
+                'Absolute_Error': [f'Median Abs Error: {filtered_df["Absolute_Error"].median():.4f}'],
+                'Relative_Error': [f'Median Rel Error: {(filtered_df["Absolute_Error"] / filtered_df["Target"] * 100).median():.2f}%']
+            })
+            
+            # Save the results
+            output_file = output_dir / f'best_predictions_threshold_{threshold}.csv'
+            pd.concat([best_predictions, stats_df], ignore_index=True).to_csv(output_file, index=False)
+            
+            print(f"Saved best {num_samples} predictions for targets > {threshold} (from {len(filtered_df)} samples)")
+            
+            # Also save the worst predictions for this threshold
+            worst_predictions = filtered_df.sort_values(by='Absolute_Error', ascending=False).head(num_samples)
+            worst_predictions['Relative_Error'] = (worst_predictions['Absolute_Error'] / worst_predictions['Target']) * 100
+            
+            output_file = output_dir / f'worst_predictions_threshold_{threshold}.csv'
+            pd.concat([worst_predictions, stats_df], ignore_index=True).to_csv(output_file, index=False)
+            
+            print(f"Saved worst {num_samples} predictions for targets > {threshold} (from {len(filtered_df)} samples)")
