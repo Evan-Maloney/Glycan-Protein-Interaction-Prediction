@@ -49,6 +49,9 @@ class RDKITGlycanEncoder(GlycanEncoder):
         features = torch.tensor([feature_func(mol) for feature_func in self.features], dtype=torch.float32).to(device)
         return self.linear(features)
     
+    def encode_iupac(self, iupacs: str, device: torch.device) -> torch.Tensor:
+        pass
+    
     def encode_batch(self, batch_data: List[str], device: torch.device) -> torch.Tensor:
         
         batch_features = [self.encode_smiles(smiles, device) for smiles in batch_data]

@@ -98,6 +98,9 @@ class ACONNEncoderV2(GlycanEncoder):
     def encode_smiles(self, smiles: str, device: torch.device) -> torch.Tensor:
         return self.forward(smiles, device)
 
+    def encode_iupac(self, iupacs: str, device: torch.device) -> torch.Tensor:
+        pass
+    
     def encode_batch(self, batch_data: List[str], device: torch.device) -> torch.Tensor:
         data_list = [self.smiles_to_graph(s) for s in batch_data]
         batch = Batch.from_data_list(data_list).to(device)
