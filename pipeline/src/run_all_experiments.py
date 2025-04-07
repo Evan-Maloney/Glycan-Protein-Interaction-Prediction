@@ -23,7 +23,7 @@ def update_config_file(config_path, glycan_encoder, protein_encoder, binding_pre
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default="configs/default_config.yaml")
+    parser.add_argument("--config", type=str, default="configs/default_run_all_config.yaml")
     args = parser.parse_args()
     
     config_path = args.config
