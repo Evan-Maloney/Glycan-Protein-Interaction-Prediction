@@ -567,6 +567,42 @@ class BindingTrainer:
         }
             
         return result
+    
+    def create_scatter_plot(self, predictions: torch.Tensor, targets: torch.Tensor, prefix: str = "scatter"):
+        """
+        Create a scatterplot of true binding values vs predicted binding values.
+        
+        Args:
+            predictions: Tensor of predicted binding values.
+            targets: Tensor of true binding values.
+            prefix: Optional prefix for the filename.
+        """
+        # Convert tensors to numpy arrays and flatten for plotting
+        predictions_np = predictions.cpu().numpy().flatten()
+        targets_np = targets.cpu().numpy().flatten()
+        
+        # Create the scatter plot
+        plt.figure(figsize=(10, 6))
+        plt.scatter(targets_np, predictions_np, alpha=0.6, color='skyblue', edgecolor='k', label='Predictions')
+        
+        # Create a reference line y = x (ideal prediction line)
+        min_val = min(targets_np.min(), predictions_np.min())
+        max_val = max(targets_np.max(), predictions_np.max())
+        plt.plot([min_val, max_val], [min_val, max_val], color='red', linestyle='--', label='Ideal')
+        
+        # Customize labels and title
+        plt.xlabel('True Binding Value')
+        plt.ylabel('Predicted Binding Value')
+        plt.title(f'{prefix} Scatterplot: True vs Predicted Binding Values')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        # Ensure the plots directory exists and save the plot
+        plots_dir = self.experiment_dir / 'plots'
+        plots_dir.mkdir(exist_ok=True)
+        plt.savefig(plots_dir / f'{prefix}_scatterplot.png')
+        plt.close()
+
 
     def plot_metrics(self, metrics_df: pd.DataFrame, fold_metrics_df: pd.DataFrame = None):
         plots_dir = self.experiment_dir / 'plots'
@@ -785,6 +821,9 @@ class BindingTrainer:
                         train_predictions=train_predictions, 
                         train_targets=train_targets
                     )
+
+                    self.create_scatter_plot(val_predictions, val_targets, prefix=f"fold{fold_idx}_final")
+
                     # Save the worst predictions from the validation set (uses the original val_data DataFrame)
                     self.save_worst_predictions(val_data, val_predictions, val_targets)
                     self.create_filtered_error_histogram(
