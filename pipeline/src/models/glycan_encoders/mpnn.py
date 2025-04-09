@@ -51,7 +51,7 @@ class MPNNGlycanEncoder(GlycanEncoder):
         # (For example: one-hot atomic number (118) + mass (1) + row (1) + column (1) + chirality one-hot (4))
         self.base_node_feature_dim = 118 + 1 + 1 + 1 # + 4
         
-        # After concatenating positional embeddings, node feature dim becomes:
+        # After concatenating positional and structural embeddings, node feature dim becomes:
         self.node_feature_dim = self.base_node_feature_dim + self.pos_emb_dim + 2
 
         # Edge features dimension (example): 11.
@@ -64,14 +64,14 @@ class MPNNGlycanEncoder(GlycanEncoder):
         # Message passing function
         self.f_message = nn.Sequential(
             nn.Linear(self.hidden_state_size + self.edge_feature_dim, self.hidden_state_size),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Linear(self.hidden_state_size, self.hidden_state_size)
         )
         
         # Update function
         self.f_update = nn.Sequential(
             nn.Linear(2 * self.hidden_state_size, self.hidden_state_size),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Linear(self.hidden_state_size, self.hidden_state_size)
         )
 
@@ -227,9 +227,11 @@ class MPNNGlycanEncoder(GlycanEncoder):
         # Compute positional embeddings from the Laplacian.
         pos_emb = self._get_positional_embeddings(adj, self.pos_emb_dim)  # Shape: (N, pos_emb_dim)
 
+        # Compute strucrtural embeddings (random walk statistics).
         rw_stats = self._get_random_walk_stats(adj)  # Shape: (N, 2)
-        # Concatenate positional embeddings to raw node features.
-        x = torch.cat([x_raw, pos_emb, rw_stats], dim=1)  # Shape: (N, base_node_feature_dim + pos_emb_dim)
+
+        # Concatenate positional embeddings and structural embeddings to raw node features.
+        x = torch.cat([x_raw, pos_emb, rw_stats], dim=1)  # Shape: (N, base_node_feature_dim + pos_emb_dim + 2)
         
         # Optionally, apply normalization (here we pass features through).
         x_norm = self._normalize_node_features(x)
@@ -278,6 +280,9 @@ class MPNNGlycanEncoder(GlycanEncoder):
         with torch.no_grad():
             embedding = self.forward(data)
         return embedding
+    
+    def encode_iupac(self, iupacs: str, device: torch.device) -> torch.Tensor:
+        pass
     
     def encode_batch(self, batch_data: List[str], device: torch.device) -> torch.Tensor:
         """Convert a batch of SMILES strings to graph embeddings"""
@@ -367,7 +372,7 @@ class MPNNGlycanEncoder(GlycanEncoder):
             messages_flat = self.f_message(msg_input_flat)  # (N*N, hidden_state_size)
             messages = messages_flat.view(N, N, self.hidden_state_size)  # (N, N, hidden_state_size)
             messages = messages * adj.unsqueeze(2)  # mask non-existent edges
-            m = messages.sum(dim=1)  # aggregate messages by mean: (N, hidden_state_size)
+            m = messages.sum(dim=1)  # aggregate messages by sum: (N, hidden_state_size)
             h = F.relu(self.f_update(torch.cat([h, m], dim=1)))  # update node states: (N, hidden_state_size)
 
         # Global mean pooling.
