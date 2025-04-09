@@ -26,4 +26,3 @@ model_specific_params: {}
 hf_auth: False
 beta: 1.0 # beta val for smooth_l1_loss loss_type
 delta: 1.0 # delta val for huber loss_type
-
