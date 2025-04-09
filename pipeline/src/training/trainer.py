@@ -304,17 +304,18 @@ class BindingTrainer:
             concentration = batch['concentration'].to(self.device)
             
             targets = batch['target'].to(self.device)
-            
-            # Prevent double-log when using both log_predict=True and a log-based loss
-            apply_log = self.config.log_predict and self.config.loss_type not in ['rmsle', 'log_mae', 'log_l1']
-            if apply_log:
-                targets = torch.log(targets + 1e-6)
-            
             predictions = self.binding_predictor(
                 glycan_encoding,
                 protein_encoding,
                 concentration
             )
+
+            # Prevent double-log when using both log_predict=True and a log-based loss
+            apply_log = self.config.log_predict and self.config.loss_type not in ['rmsle', 'log_mae', 'log_l1']
+            if apply_log:
+                targets = torch.log(targets + 1)
+                predictions = torch.log(predictions + 1)
+            
             
             loss = self.criterion(predictions, targets, fold_weight)
             
@@ -327,8 +328,8 @@ class BindingTrainer:
             
             # revert predictions and targets to original values for original analysis if using log transform
             if apply_log:
-                predictions = torch.exp(predictions) - 1e-6
-                targets = torch.exp(targets) - 1e-6
+                predictions = torch.exp(predictions) - 1
+                targets = torch.exp(targets) - 1
             
             # track totals
             total_loss += loss.item()
@@ -363,24 +364,24 @@ class BindingTrainer:
                 protein_encoding = batch['protein_encoding'].to(self.device)
                 concentration = batch['concentration'].to(self.device)
                 targets = batch['target'].to(self.device)
-                
-                # Prevent double-log when using both log_predict=True and a log-based loss
-                apply_log = self.config.log_predict and self.config.loss_type not in ['rmsle', 'log_mae', 'log_l1']
-                if apply_log:
-                    targets = torch.log(targets + 1e-6)
-                
                 predictions = self.binding_predictor(
                     glycan_encoding,
                     protein_encoding,
                     concentration
                 )
+
+                # Prevent double-log when using both log_predict=True and a log-based loss
+                apply_log = self.config.log_predict and self.config.loss_type not in ['rmsle', 'log_mae', 'log_l1']
+                if apply_log:
+                    targets = torch.log(targets + 1)
+                    predictions = torch.log(predictions + 1)
                 
                 loss = self.criterion(predictions, targets, fold_weight)
                 
                 # revert predictions and targets to original values for original analysis if using log transform
                 if apply_log:
-                    predictions = torch.exp(predictions) - 1e-6
-                    targets = torch.exp(targets) - 1e-6
+                    predictions = torch.exp(predictions) - 1
+                    targets = torch.exp(targets) - 1
                 
                 # track totals
                 total_loss += loss.item()
