@@ -8,6 +8,11 @@ class DummyGlycanEncoder(GlycanEncoder):
     def __init__(self, embedding_dim: int = 128):
         super().__init__()
         self._embedding_dim = embedding_dim
+        
+    
+    def encode_iupac(self, smiles: str, device: torch.device) -> torch.Tensor:
+        pass
+        #return torch.randn(self._embedding_dim).to(device)
     
     def encode_smiles(self, smiles: str, device: torch.device) -> torch.Tensor:
         return torch.randn(self._embedding_dim).to(device)

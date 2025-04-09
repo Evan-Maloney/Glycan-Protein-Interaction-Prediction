@@ -4,6 +4,9 @@ from ..models.glycan_encoders.dummy import DummyGlycanEncoder
 from ..models.glycan_encoders.chemberta import ChemBERTaEncoder
 from ..models.glycan_encoders.rdkit_encoder import RDKITGlycanEncoder
 from ..models.glycan_encoders.gnn import GNNGlycanEncoder
+from ..models.glycan_encoders.aconn_gnn import ACONNEncoder
+from ..models.glycan_encoders.aconn_gnnV2 import ACONNEncoderV2
+from ..models.glycan_encoders.sweet_talk import SweetTalkGlycanEncoder
 from ..models.glycan_encoders.sweetnet import SweetNetEncoder
 from ..models.protein_encoders.dummy import DummyProteinEncoder
 from ..models.glycan_encoders.gifflar_encoder import GIFFLAREncoder
@@ -14,11 +17,19 @@ from ..models.protein_encoders.biopy import BioPyProteinEncoder
 from ..models.binding_predictors.dnn import DNNBindingPredictor
 from ..models.protein_encoders.esmc import ESMCEncoder
 
+from ..models.binding_predictors.attention import AttentionFusionBindingPredictor
+
 from ..models.protein_encoders.ankh import AnkhEncoder
 from ..models.protein_encoders.prostt5 import ProstT5Encoder
 from ..models.protein_encoders.pt_gnn import AdvancedGNNProteinEncoder
+from ..models.protein_encoders.lstm import LSTMProteinEncoder
 
 from ..models.binding_predictors.mean_predictor import MeanPredictor
+from ..models.binding_predictors.zero_predictor import ZeroPredictor
+
+
+from ..models.protein_encoders.biopy import BioPyProteinEncoder
+from ..models.protein_encoders.esm2_320 import ESM2Encoder
 
 
 
@@ -31,6 +42,9 @@ def create_glycan_encoder(encoder_type: str, **kwargs) -> Any:
         'gnn': GNNGlycanEncoder,
         'sweetnet': SweetNetEncoder,
         'gifflar': GIFFLAREncoder,
+        'aconn_gnn': ACONNEncoder,
+        'aconn_gnnV2': ACONNEncoderV2,
+        'sweettalk': SweetTalkGlycanEncoder
     }
     
     encoder = encoders[encoder_type]
@@ -44,7 +58,9 @@ def create_protein_encoder(encoder_type: str, **kwargs) -> Any:
         'ankh': AnkhEncoder,
         'prostt5': ProstT5Encoder,
         'biopy': BioPyProteinEncoder,
-        'pt_gnn': AdvancedGNNProteinEncoder
+        'pt_gnn': AdvancedGNNProteinEncoder,
+        'lstm': LSTMProteinEncoder,
+        'esm2': ESM2Encoder
     }
 
     encoder = encoders[encoder_type]
@@ -55,7 +71,9 @@ def create_binding_predictor(predictor_type: str, **kwargs) -> Any:
     predictors = {
         'dummy': DummyBindingPredictor,
         'dnn': DNNBindingPredictor,
-        'mean': MeanPredictor
+        'mean': MeanPredictor,
+        'attention': AttentionFusionBindingPredictor,
+        'zero': ZeroPredictor
     }
     
     predictor = predictors[predictor_type]

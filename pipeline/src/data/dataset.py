@@ -459,6 +459,7 @@ def prepare_train_val_datasets(
     proteins_df: pd.DataFrame,
     glycan_encoder: GlycanEncoder,
     protein_encoder: ProteinEncoder,
+    glycan_type: str,
     random_state: int,
     split_mode: str,
     use_kfolds: bool,
@@ -481,8 +482,7 @@ def prepare_train_val_datasets(
     
     # for each glycan create a glycan_encoding feature where we use glycan_encoder to encode the SMILES
     # for each protein create a protein_encoding feature where we use protein_encoder to encode the aminoacids
-    glycan_representation = getattr(glycan_encoder, "representation", "SMILES")
-    glycan_encodings = glycan_encoder.encode_batch(glycans_df[glycan_representation].tolist(), device)
+    glycan_encodings = glycan_encoder.encode_batch(glycans_df[glycan_type].tolist(), device)
     protein_encodings = protein_encoder.encode_batch(proteins_df['Amino Acid Sequence'].tolist(), device)
     
     

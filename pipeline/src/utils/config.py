@@ -14,6 +14,8 @@ class TrainingConfig:
     glycan_encoder_type: str
     protein_encoder_type: str
     binding_predictor_type: str
+    glycan_type: str
+    loss_type: str
     num_epochs: int
     batch_size: int
     learning_rate: float
@@ -29,6 +31,8 @@ class TrainingConfig:
     device: str = "cuda"  # or "cpu"
     model_specific_params: Dict = field(default_factory=dict)
     hf_auth: Optional[bool] = None
+    beta: float = 1.0 # beta val for smooth_l1_loss loss_type
+    delta: float = 1.0 # delta val for huber loss_type
 
     # Based on: https://github.com/run-llama/llama_deploy/blob/f625bfd506f1be36349b23e692ca7b976f39f636/examples/llamacloud/google_drive/src/workflow.py
     @classmethod
