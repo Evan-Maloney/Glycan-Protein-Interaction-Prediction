@@ -4,9 +4,10 @@ from ..models.glycan_encoders.dummy import DummyGlycanEncoder
 from ..models.glycan_encoders.chemberta import ChemBERTaEncoder
 from ..models.glycan_encoders.rdkit_encoder import RDKITGlycanEncoder
 from ..models.glycan_encoders.gnn import GNNGlycanEncoder
-
 from ..models.glycan_encoders.sweetnet import SweetNetEncoder
 from ..models.protein_encoders.dummy import DummyProteinEncoder
+from ..models.glycan_encoders.gifflar_encoder import GIFFLAREncoder
+
 from ..models.binding_predictors.dummy import DummyBindingPredictor
 from ..models.protein_encoders.biopy import BioPyProteinEncoder
 
@@ -29,6 +30,7 @@ def create_glycan_encoder(encoder_type: str, **kwargs) -> Any:
         'rdkit': RDKITGlycanEncoder,
         'gnn': GNNGlycanEncoder,
         'sweetnet': SweetNetEncoder,
+        'gifflar': GIFFLAREncoder,
     }
     
     encoder = encoders[encoder_type]
