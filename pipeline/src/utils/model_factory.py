@@ -7,6 +7,7 @@ from ..models.glycan_encoders.gnn import GNNGlycanEncoder
 from ..models.glycan_encoders.aconn_gnn import ACONNEncoder
 from ..models.glycan_encoders.aconn_gnnV2 import ACONNEncoderV2
 from ..models.glycan_encoders.sweet_talk import SweetTalkGlycanEncoder
+from ..models.glycan_encoders.sweetnet import SweetNetEncoder
 
 from ..models.protein_encoders.dummy import DummyProteinEncoder
 from ..models.binding_predictors.dummy import DummyBindingPredictor
@@ -38,7 +39,8 @@ def create_glycan_encoder(encoder_type: str, **kwargs) -> Any:
         'gnn': GNNGlycanEncoder,
         'aconn_gnn': ACONNEncoder,
         'aconn_gnnV2': ACONNEncoderV2,
-        'sweettalk': SweetTalkGlycanEncoder
+        'sweettalk': SweetTalkGlycanEncoder,
+        'sweetnet': SweetNetEncoder,
     }
     
     encoder = encoders[encoder_type]
