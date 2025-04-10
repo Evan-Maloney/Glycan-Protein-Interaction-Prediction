@@ -6,7 +6,7 @@ from ...base.encoders import ProteinEncoder
 
 
 class LSTMProteinEncoder(ProteinEncoder):
-    def __init__(self, embedding_dim=16, hidden_dim=32, output_dim=12, dropout=0.2):
+    def __init__(self, embedding_dim=16, hidden_dim=32, output_dim=32, dropout=0.2):
         super().__init__()
         self._embedding_dim = output_dim
 

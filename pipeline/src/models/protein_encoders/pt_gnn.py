@@ -10,7 +10,7 @@ from ...base.encoders import ProteinEncoder
 
 "This was created in combination of Claude 3.7, https://www.datacamp.com/tutorial/comprehensive-introduction-graph-neural-networks-gnns-tutorial and Maxym's Glycan GNN"
 
-class AdvancedGNNProteinEncoder(ProteinEncoder):
+class AdvancedGNNProteinEncoder(nn.Module):
     """
     Advanced Graph Neural Network-based Protein Encoder that incorporates:
     - Rich amino acid feature representation
@@ -57,7 +57,7 @@ class AdvancedGNNProteinEncoder(ProteinEncoder):
         self.default_idx = len(self.aa_to_idx)  # For unknown amino acids
         
         # Feature initialization layers
-        self.position_embedding = nn.Embedding(1000, self.position_embedding_dim)  # Max sequence length of 1000
+        self.position_embedding = nn.Embedding(1000, self.position_embedding_dim).cuda()  # Max sequence length of 1000
         
         # Physicochemical property mappings (pre-computed)
         self.aa_properties = self._initialize_aa_properties()
@@ -131,14 +131,14 @@ class AdvancedGNNProteinEncoder(ProteinEncoder):
     def _one_hot_encode_aa(self, aa: str) -> torch.Tensor:
         """One-hot encode an amino acid"""
         idx = self.aa_to_idx.get(aa, self.default_idx)
-        one_hot = torch.zeros(self.aa_embedding_dim)
+        one_hot = torch.zeros(self.aa_embedding_dim).cuda()
         if idx < self.aa_embedding_dim:
             one_hot[idx] = 1.0
-        return one_hot
+        return one_hot.cuda()
     
     def _get_aa_properties(self, aa: str) -> torch.Tensor:
         """Get physicochemical properties for an amino acid"""
-        return self.aa_properties.get(aa, self.aa_properties['X'])
+        return self.aa_properties.get(aa, self.aa_properties['X']).cuda()
     
     def _sequence_to_graph(self, 
                           sequence: str, 
@@ -162,16 +162,17 @@ class AdvancedGNNProteinEncoder(ProteinEncoder):
                 aa = 'X'  # Use default for unknown amino acids
                 
             # Combine features
-            one_hot = self._one_hot_encode_aa(aa)
-            properties = self._get_aa_properties(aa)
-            position = self.position_embedding(torch.tensor([min(i, 999)]))
+            #aa = aa.cuda()
+            one_hot = self._one_hot_encode_aa(aa).cuda()
+            properties = self._get_aa_properties(aa).cuda()
+            position = self.position_embedding(torch.tensor([min(i, 999)]).cuda()).cuda()
             
             # Concatenate all features
-            features = torch.cat([one_hot, properties, position.squeeze(0)])
+            features = torch.cat([one_hot, properties, position.squeeze(0)]).cuda()
             x.append(features)
             
         # Create node features tensor
-        x = torch.stack(x)
+        x = torch.stack(x).cuda()
         
         # Create edge index
         edge_index = []
@@ -197,9 +198,9 @@ class AdvancedGNNProteinEncoder(ProteinEncoder):
                 # Convert to tensor if not already
                 if not isinstance(contact_map, torch.Tensor):
                     if isinstance(contact_map, np.ndarray):
-                        contact_map = torch.tensor(contact_map)
+                        contact_map = torch.tensor(contact_map).cuda()
                     elif isinstance(contact_map, list):
-                        contact_map = torch.tensor(contact_map)
+                        contact_map = torch.tensor(contact_map).cuda()
                 
                 # Only use contact map if it's now a tensor with the right shape
                 if isinstance(contact_map, torch.Tensor) and contact_map.dim() == 2:
@@ -220,10 +221,10 @@ class AdvancedGNNProteinEncoder(ProteinEncoder):
         else:
             # Handle case with no edges (very short sequence)
             edge_index = torch.zeros((2, 0), dtype=torch.long)
-        
+        edge_index = edge_index.cuda()
         # Create PyG Data object
         data = Data(x=x, edge_index=edge_index)
-        return data
+        return data.cuda()
     
     def forward(self, data: Data) -> torch.Tensor:
         """
@@ -239,11 +240,11 @@ class AdvancedGNNProteinEncoder(ProteinEncoder):
         
         # Apply GNN layers with residual connections
         for i in range(self.num_layers):
-            identity = x
-            x = self.convs[i](x, edge_index)
+            identity = x.cuda()
+            x = self.convs[i](x, edge_index.cuda())
             x = self.batch_norms[i](x)
             x = F.relu(x)
-            x = F.dropout(x, p=self.dropout, training=self.training)
+            x = F.dropout(x, p=self.dropout)#, training=self.training)
             
             # Add residual connection if dimensions match
             if i > 0 and x.size(-1) == identity.size(-1):
@@ -265,7 +266,7 @@ class AdvancedGNNProteinEncoder(ProteinEncoder):
             x = torch.cat([x_mean, x_max], dim=1)
         
         # Final projection
-        x = self.projection(x)
+        x = self.projection(x).cuda()
         
         return x
     
@@ -284,7 +285,7 @@ class AdvancedGNNProteinEncoder(ProteinEncoder):
             Embedding tensor
         """
         # Convert sequence to graph
-        data = self._sequence_to_graph(sequence, contact_map)
+        data = self._sequence_to_graph(sequence, contact_map).to(device)
         
         # Add batch dimension for single sequence
         data.batch = torch.zeros(len(sequence), dtype=torch.long)
@@ -314,19 +315,26 @@ class AdvancedGNNProteinEncoder(ProteinEncoder):
         Returns:
             Batch of embedding tensors
         """
+        print('deviceee,', device)
+        #batch_data.to(device)
         # Create a list of Data objects
         data_list = []
+        count = 0
         for sequence in batch_data:
+            count += 1
+            print(f'encode batch progress: {count}/{len(batch_data)}')
             # Don't use contact maps for now to avoid the error
-            data = self._sequence_to_graph(sequence, None)
+            #sequence = sequence.cuda()
+            data = self._sequence_to_graph(sequence, None).cuda()
+
             data_list.append(data)
             
         # Create a batch from the list
         batch = Batch.from_data_list(data_list)
         
         # Move to device if specified
-        if device is not None:
-            batch = batch.to(device)
+        #if device is not None:
+        batch = batch.cuda()
         
         # Forward pass
         with torch.no_grad():
@@ -406,85 +414,3 @@ class AdvancedGNNProteinEncoder(ProteinEncoder):
     @property
     def embedding_dim(self) -> int:
         return self._embedding_dim
-
-# Extended version with additional capabilities
-class ExtendedGNNProteinEncoder(AdvancedGNNProteinEncoder):
-    """
-    Extended version of the GNN Protein Encoder with additional capabilities:
-    - Support for domain-specific features (binding sites, PTMs)
-    - Integration with external structural predictions
-    - Multi-level representation (residue, domain, global)
-    """
-    def __init__(self, 
-                 embedding_dim: int = 256, 
-                 hidden_channels: int = 128,
-                 num_layers: int = 3,
-                 dropout: float = 0.2,
-                 use_attention: bool = True,
-                 readout_mode: str = 'mean+max',
-                 use_structure: bool = False):
-        super().__init__(embedding_dim, 
-                         hidden_channels, 
-                         num_layers, 
-                         dropout, 
-                         use_attention, 
-                         readout_mode)
-        
-        # Additional features for structure-aware representation
-        self.use_structure = use_structure
-        
-        if use_structure:
-            # Additional layers for structure integration
-            self.structure_encoder = nn.Sequential(
-                nn.Linear(hidden_channels + 3, hidden_channels),  # +3 for predicted SS
-                nn.ReLU(),
-                nn.Dropout(dropout),
-                nn.Linear(hidden_channels, hidden_channels)
-            )
-    
-    def encode_with_structure(self, 
-                             sequence: str, 
-                             ss_pred: Optional[Dict[str, torch.Tensor]] = None,
-                             contact_map: Optional[torch.Tensor] = None) -> torch.Tensor:
-        """
-        Encode a protein with structural information
-        
-        Args:
-            sequence: Amino acid sequence
-            ss_pred: Secondary structure predictions
-            contact_map: Contact map or distance matrix
-            
-        Returns:
-            Structure-aware embedding
-        """
-        # Get base embedding
-        if ss_pred is None:
-            ss_pred = self.predict_secondary_structure(sequence)
-            
-        if contact_map is None and self.use_structure:
-            contact_map = self.estimate_contact_map(sequence)
-            
-        # Create graph with structure information
-        data = self._sequence_to_graph(sequence, contact_map)
-        
-        # Add secondary structure information to node features
-        if self.use_structure:
-            ss_features = torch.stack([
-                ss_pred['helix'],
-                ss_pred['sheet'],
-                ss_pred['coil']
-            ], dim=1)
-            
-            # Process through structure-aware layers
-            # This would be more complex in a real implementation
-            # Here we just show the concept
-            data.x = torch.cat([data.x, ss_features], dim=1)
-            
-        # Add batch dimension
-        data.batch = torch.zeros(len(sequence), dtype=torch.long)
-        
-        # Forward pass
-        with torch.no_grad():
-            embedding = self.forward(data)
-            
-        return embedding

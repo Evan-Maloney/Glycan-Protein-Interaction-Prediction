@@ -4,8 +4,10 @@ predict_data_path: "data/Train_Fractions.csv"
 glycans_data_path: "data/Glycan-Structures-CFG611.txt"
 proteins_data_path: "data/Protein-Sequence-Table.txt"
 glycan_encoder_type: "aconn_gnnV2"
-protein_encoder_type: "pt_gnn"
-binding_predictor_type: "dnn"
+protein_encoder_type: "lstm"
+binding_predictor_type: "attention"
+glycan_type: "SMILES"
+loss_type: 'smooth_l1' # loss types: 'mse', 'rmse', 'rmsle', 'mae', 'log_mae', 'huber', 'smooth_l1' 
 num_epochs: 10
 batch_size: 32
 learning_rate: 0.005
@@ -22,3 +24,5 @@ k_folds: 3
 device: "cuda"
 model_specific_params: {}
 hf_auth: False
+beta: 0.8 # beta val for smooth_l1_loss loss_type
+delta: 1.0 # delta val for huber loss_type
