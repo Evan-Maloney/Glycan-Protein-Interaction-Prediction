@@ -1246,4 +1246,4 @@ class BindingTrainer:
             worst_predictions['Relative_Error'] = (worst_predictions['Absolute_Error'] / worst_predictions['Target']) * 100
             output_file = output_dir / f'worst_predictions_threshold_{threshold}.csv'
             pd.concat([worst_predictions, stats_df], ignore_index=True).to_csv(output_file, index=False)
- 
+            print(f"Saved worst {num_samples} predictions for targets > {threshold} (from {len(filtered_df)} samples)")
