@@ -13,7 +13,6 @@ class SweetNetEncoder(GlycanEncoder):
         self.model = prep_model("SweetNet", 1011, trained = True)
         self.model.eval()
         self._embedding_dim = self.model.item_embedding.embedding_dim
-        self.representation = "IUPAC"
         
     def _process_iupacs(self, glycans: List[str]) -> List[str]:
         for count, iupac in enumerate(glycans): 
@@ -70,7 +69,7 @@ class SweetNetEncoder(GlycanEncoder):
         return res
     
     def encode_batch(self, batch_data: List[str], device: torch.device) -> torch.Tensor:
-        batch_data = self.process_iupacs(batch_data)
+        batch_data = self._process_iupacs(batch_data)
         glycan_loader = dataset_to_dataloader(batch_data, range(len(batch_data)), shuffle = False)
         res = torch.zeros((len(batch_data), 128), device=device)
         # Get predictions for each mini-batch
