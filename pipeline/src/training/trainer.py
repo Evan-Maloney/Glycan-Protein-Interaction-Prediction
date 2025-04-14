@@ -835,12 +835,15 @@ class BindingTrainer:
                 
                 # Create histograms for the last epoch and save worst predictions
                 if epoch == self.config.num_epochs - 1:
+                    # Comment out inference analysis plots for now (having matplotlib issues)
+                    """
                     error_stats = self.create_error_histogram(
                         val_predictions, val_targets, 
                         prefix=f"fold{fold_idx}_final",
                         train_predictions=train_predictions, 
                         train_targets=train_targets
                     )
+                    
                     
                     self.create_scatter_plot(val_predictions, val_targets, prefix=f"fold{fold_idx}_final")
                     
@@ -872,6 +875,7 @@ class BindingTrainer:
                         thresholds=[0.2, 0.5], 
                         num_samples=10
                     )
+                    """
                 
                 # Save metrics for this fold/run
                 timestamp = datetime.now().isoformat()

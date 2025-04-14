@@ -454,6 +454,29 @@ def prepare_kfold_datasets(
     
     return full_indicies, glycan_encodings, protein_encodings
 
+def batch_encode(encoder, data_list, device, batch_size):
+    """Process data in batches to avoid CUDA memory overflow"""
+    all_encodings = []
+    total_items = len(data_list)
+    
+    for i in range(0, total_items, batch_size):
+        # Get current batch
+        batch = data_list[i:min(i+batch_size, total_items)]
+        
+        # Encode batch
+        batch_encodings = encoder.encode_batch(batch, device)
+        all_encodings.append(batch_encodings)
+        
+        # Print progress
+        print(f'Progress: {min(i+batch_size, total_items)}/{total_items}')
+        
+        # Optional: clear CUDA cache to prevent memory fragmentation
+        if device.type == 'cuda':
+            torch.cuda.empty_cache()
+    
+    # Concatenate all batches
+    return torch.cat(all_encodings, dim=0)
+
 def prepare_train_val_datasets(
     fractions_df: pd.DataFrame,
     glycans_df: pd.DataFrame,
@@ -481,10 +504,28 @@ def prepare_train_val_datasets(
         Tuple of train and validation datasets
     """
     
-    # for each glycan create a glycan_encoding feature where we use glycan_encoder to encode the SMILES
-    # for each protein create a protein_encoding feature where we use protein_encoder to encode the aminoacids
-    glycan_encodings = glycan_encoder.encode_batch(glycans_df[glycan_type].tolist(), device)
-    protein_encodings = protein_encoder.encode_batch(proteins_df['Amino Acid Sequence'].tolist(), device)
+    # only do batch to not overload RAM of GPU
+    if device.type == 'cuda':
+        batch_size = 100  # Adjust based on your GPU memory
+
+        # Encode glycans in batches
+        glycan_encodings = batch_encode(
+            glycan_encoder, 
+            glycans_df[glycan_type].tolist(), 
+            device, 
+            batch_size=batch_size
+        )
+
+        # Encode proteins in batches
+        protein_encodings = batch_encode(
+            protein_encoder, 
+            proteins_df['Amino Acid Sequence'].tolist(), 
+            device, 
+            batch_size=batch_size
+        )
+    else:
+        glycan_encodings = glycan_encoder.encode_batch(glycans_df[glycan_type].tolist(), device)
+        protein_encodings = protein_encoder.encode_batch(proteins_df['Amino Acid Sequence'].tolist(), device)
     
     
     # Might move to config but leave for now as our train and test are clusterd and stratified using these parameters
