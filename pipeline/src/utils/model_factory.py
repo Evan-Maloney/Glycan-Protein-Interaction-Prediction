@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Any
 
 from ..models.glycan_encoders.dummy import DummyGlycanEncoder
 from ..models.glycan_encoders.chemberta import ChemBERTaEncoder
@@ -9,6 +9,7 @@ from ..models.glycan_encoders.aconn_gnnV2 import ACONNEncoderV2
 from ..models.glycan_encoders.sweet_talk import SweetTalkGlycanEncoder
 from ..models.glycan_encoders.sweetnet import SweetNetEncoder
 from ..models.glycan_encoders.mpnn import MPNNGlycanEncoder
+from ..models.glycan_encoders.gifflar import GIFFLAREncoder
 
 from ..models.protein_encoders.dummy import DummyProteinEncoder
 from ..models.binding_predictors.dummy import DummyBindingPredictor
@@ -42,7 +43,8 @@ def create_glycan_encoder(encoder_type: str, **kwargs) -> Any:
         'aconn_gnnV2': ACONNEncoderV2,
         'sweettalk': SweetTalkGlycanEncoder,
         'sweetnet': SweetNetEncoder,
-        'mpnn': MPNNGlycanEncoder
+        'mpnn': MPNNGlycanEncoder,
+        'gifflar': GIFFLAREncoder
     }
     
     encoder = encoders[encoder_type]
