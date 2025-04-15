@@ -20,6 +20,8 @@ random_state: 42
 # if not using kfold make sure to specify your val_split (the % of each glycan and protein class to split_mode combine into the validation set)
 use_kfold: False # recomended to not use kfold if using split_mode AND as the splitting % vary greatly
 split_mode: 'AND'
+eval_testset: False
+testdata_path: 'data/Test_Fractions.csv'
 # optional
 val_split: 0.5
 k_folds: 3
