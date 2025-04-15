@@ -16,6 +16,8 @@ protein_encoder_type: pt_gnn
 proteins_data_path: data/Protein-Sequence-Table.txt
 random_state: 42
 split_mode: AND
+eval_testset: False
+testdata_path: 'data/Test_Fractions.csv'
 train_final_model: false
 use_kfold: false
 val_split: 0.5

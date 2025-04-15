@@ -25,6 +25,8 @@ class TrainingConfig:
     train_final_model: bool
     use_kfold: bool
     split_mode: str
+    eval_testset: bool
+    testdata_path: str
     # optional parameters
     val_split: float = 0.2
     k_folds: int = 1

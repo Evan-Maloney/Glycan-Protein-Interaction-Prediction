@@ -418,6 +418,7 @@ class BindingTrainer:
         
         checkpoint_dir = self.experiment_dir / 'checkpoints'
         checkpoint_dir.mkdir(exist_ok=True)
+                  
         
         if fold is not None and epoch is not None:
             checkpoint_name = f"model_fold_{fold}_epoch_{epoch}.pt"
@@ -758,7 +759,7 @@ class BindingTrainer:
             self.config.use_kfold,
             self.config.k_folds,
             self.config.val_split,
-            self.config.device
+            torch.device(self.config.device)
         )
         
         # Create mappings
@@ -990,6 +991,9 @@ class BindingTrainer:
         # Plot the metrics
         self.plot_metrics(metrics_df, fold_metrics_df)
         
+        if self.config.eval_testset:
+            self.testset_eval(glycan_encodings, protein_encodings, glycan_mapping, protein_mapping)
+        
         # Train a final model on all data if needed
         if self.config.train_final_model:
             print("\n" + "="*50)
@@ -1014,16 +1018,31 @@ class BindingTrainer:
                 print(f"\nEpoch {epoch + 1}/{self.config.num_epochs}")
                 
                 # Use default weight for final model training
-                train_metrics = self._train_epoch(full_loader, 1.0)
+                train_metrics, epoch_predictions, epoch_targets = self._train_epoch(full_loader, 1.0)
                 
                 print(f"Train Loss: {train_metrics['loss']:.4f}")
                 
                 if (epoch + 1) % self.config.checkpoint_frequency == 0:
                     self.save_checkpoint(epoch=epoch+1)
             
+                    
+            if self.config.eval_testset:
+                self.testset_eval(glycan_encodings, protein_encodings, glycan_mapping, protein_mapping)
+                
             # Save the final model
             self.save_checkpoint()
     
+    def testset_eval(self, glycan_encodings, protein_encodings, glycan_mapping, protein_mapping):
+        # This is a hacky fix to run on testset cause for some reason run_testset.py doesnt work and dont have time to fix it. 
+        # This is bad impolementation right after training cause it encourages adjuting training on test set results but I warned the team about this already so we should be good.
+        test_fractions_df = pd.read_csv(self.config.testdata_path, sep='\t') #'data/Test_Fractions.csv', sep='\t')        
+        test_dataset = GlycoProteinDataset(
+            test_fractions_df, glycan_encodings, protein_encodings, glycan_mapping, protein_mapping
+        )
+        test_loader = DataLoader(test_dataset, batch_size=self.config.batch_size, shuffle=False)
+        test_metrics, val_predictions, val_targets = self._validate(test_loader, 1.0)
+        
+        print('TEST metrics', test_metrics)
     
     def create_filtered_error_histogram(self, predictions, targets, samples_df, target_threshold=0.5, 
                                prefix="filtered", train_predictions=None, train_targets=None, 

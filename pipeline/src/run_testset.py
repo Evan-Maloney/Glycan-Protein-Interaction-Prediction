@@ -87,7 +87,7 @@ class ModelLoader:
     def load_model(self):
         """Load the model weights from checkpoint"""
         
-        
+        print('keys:', self.checkpoint.keys())        
         # Create models
         self.glycan_encoder = create_glycan_encoder(self.config.glycan_encoder_type)
         self.protein_encoder = create_protein_encoder(self.config.protein_encoder_type)
@@ -98,13 +98,16 @@ class ModelLoader:
             'protein_dim': self.protein_encoder.embedding_dim
         }
         
-        if 'dnn_hidden_dims' in self.config.model_specific_params:
-            predictor_params['hidden_dims'] = self.config.model_specific_params['dnn_hidden_dims']
+        #if 'dnn_hidden_dims' in self.config.model_specific_params:
+            #predictor_params['hidden_dims'] = self.config.model_specific_params['dnn_hidden_dims']
         
         self.binding_predictor = create_binding_predictor(
             self.config.binding_predictor_type,
             **predictor_params
         )
+        
+        print("Checkpoint binding_predictor keys:", list(self.checkpoint['binding_predictor'].keys()))
+        print("New model binding_predictor keys:", list(self.binding_predictor.state_dict().keys()))
         
         # Load weights
         self.glycan_encoder.load_state_dict(self.checkpoint['glycan_encoder'])
@@ -122,6 +125,10 @@ class ModelLoader:
         # Create mappings and encodings
         glycan_mapping = {name: idx for idx, name in enumerate(glycans_df['Name'])}
         protein_mapping = {name: idx for idx, name in enumerate(proteins_df['ProteinGroup'])}
+        
+        
+        print(f"Number of glycans: {len(glycan_mapping)}")
+        print(f"Number of proteins: {len(protein_mapping)}")
         
         # Get encodings  
          # only do batch to not overload RAM of GPU
@@ -148,6 +155,11 @@ class ModelLoader:
             protein_encodings = self.protein_encoder.encode_batch(proteins_df['Amino Acid Sequence'].tolist(), self.device)
         
         
+        print(f"Glycan encodings shape: {glycan_encodings.shape}")
+        print(f"Protein encodings shape: {protein_encodings.shape}")
+        print(f"Sample glycan encoding (mean, std): ({glycan_encodings[0].mean().item():.4f}, {glycan_encodings[0].std().item():.4f})")
+        print(f"Sample protein encoding (mean, std): ({protein_encodings[0].mean().item():.4f}, {protein_encodings[0].std().item():.4f})")
+        
         # Create dataset and dataloader
         test_dataset = GlycoProteinDataset(
             fractions_df, glycan_encodings, protein_encodings, glycan_mapping, protein_mapping
@@ -158,6 +170,14 @@ class ModelLoader:
         self.glycan_encoder.eval()
         self.protein_encoder.eval()
         self.binding_predictor.eval()
+        
+        print("Checking model parameters for non-zero values:")
+        for name, param in self.binding_predictor.named_parameters():
+            if param.data.sum() == 0:
+                print(f"WARNING: {name} has all zero values")
+            else:
+                print(f"OK: {name} has non-zero values (mean: {param.data.mean().item():.6f})")
+        
         
         all_predictions = []
         all_targets = []
@@ -178,6 +198,9 @@ class ModelLoader:
         
         # Calculate metrics
         predictions = torch.cat(all_predictions)
+        
+        print('SUMMMM', predictions.float().sum())
+        
         targets = torch.cat(all_targets)
         metrics = calculate_metrics(predictions, targets)
         
