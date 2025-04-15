@@ -3,11 +3,11 @@ output_dir: "experiments"
 predict_data_path: "data/Train_Fractions.csv"
 glycans_data_path: "data/Glycan-Structures-CFG611.txt"
 proteins_data_path: "data/Protein-Sequence-Table.txt"
-glycan_encoder_type: "aconn_gnnV2"
-protein_encoder_type: "lstm"
-binding_predictor_type: "attention"
+glycan_encoder_type: "aconn_gnn"
+protein_encoder_type: "pt_gnn"
+binding_predictor_type: "dnn"
 glycan_type: "SMILES"
-loss_type: 'smooth_l1' # loss types: 'mse', 'rmse', 'rmsle', 'mae', 'log_mae', 'huber', 'smooth_l1' 
+loss_type: 'huber' # loss types: 'mse', 'rmse', 'rmsle', 'mae', 'log_mae', 'huber', 'smooth_l1' 
 num_epochs: 10
 batch_size: 32
 learning_rate: 0.005
