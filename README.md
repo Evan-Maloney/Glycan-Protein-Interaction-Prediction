@@ -1,5 +1,18 @@
 # Glycan-Protein-Interaction-Prediction
+This repository contains an adaptable pipeline for training deep-learning models to predict protein-glycan interactions. The predictor architecture contains three main model components:
 
+1. Glycan Encoders. Stored in `pipeline/src/models/glycan_encoders`
+1. Protein Encoders. Stored in `pipeline/src/models/protein_encoders`
+1. Binding Predictors. Stored in `pipeline/src/models/binding_predictors`
+
+Each of these components are fully modular, meaning you can mix and match different combinations of encoders and predictors.
+
+# How to run an experiment
+Configure the experiment by adding a yaml file in `pipeline/configs`. The configuration specifies the model types, hyperparameters, and dataset settings. To see all available options for model types, refer to the model factory in `pipeline/src/utils/model_factory.py`. Once you have defined the experiment configuration, run the experiment with the following command in the pipeline directory:
+
+```bash
+python -m src.run_experiment --config  [config_file_path]
+```
 
 # Installing miniconda 
 
