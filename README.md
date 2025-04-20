@@ -14,6 +14,11 @@ Configure the experiment by adding a yaml file in `pipeline/configs`. The config
 python -m src.run_experiment --config  [config_file_path]
 ```
 
+To run all experiments:
+```bash
+python3 -m src.run_all_experiments --config configs/default_run_all_config.yaml
+```
+
 # Installing miniconda 
 
 MiniConda is a minimal anaconda env that just has python and conda installed. We will use this to create a specific env for this project and only install the libraries we need. 
